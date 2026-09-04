@@ -12,7 +12,7 @@ import {
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Link, useRouter } from "expo-router";
+import { Link } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { useAuth } from "@/src/auth-context";
@@ -23,12 +23,12 @@ const HERO =
   "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMHdob2xlc2FsZSUyMHZlZ2V0YWJsZXMlMjBjcmF0ZXxlbnwwfHx8fDE3ODg1NDgxNzN8MA&ixlib=rb-4.1.0&q=85";
 
 export default function Login() {
+  const [mode, setMode] = useState<"company" | "supplier">("company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const { signIn } = useAuth();
   const toast = useToast();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
@@ -41,13 +41,15 @@ export default function Login() {
     try {
       setBusy(true);
       await signIn(email.trim(), password);
-      router.replace("/(app)");
+      // AuthGate redirects admin → /(admin), user → /(app)
     } catch (e: any) {
       toast.show(e?.message || "Connexion impossible", "error");
     } finally {
       setBusy(false);
     }
   }
+
+  const isSupplier = mode === "supplier";
 
   return (
     <KeyboardAvoidingView
@@ -78,16 +80,68 @@ export default function Login() {
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.title}>Connexion</Text>
-          <Text style={styles.subtitle}>Connectez-vous à votre compte entreprise</Text>
+          {/* Segmented tabs */}
+          <View style={styles.tabs} testID="login-mode-tabs">
+            <Pressable
+              testID="tab-company"
+              onPress={() => setMode("company")}
+              style={[styles.tab, !isSupplier && styles.tabActive]}
+            >
+              <Feather
+                name="briefcase"
+                size={14}
+                color={!isSupplier ? colors.onBrandPrimary : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.tabTxt,
+                  { color: !isSupplier ? colors.onBrandPrimary : colors.muted },
+                ]}
+              >
+                Entreprise
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="tab-supplier"
+              onPress={() => setMode("supplier")}
+              style={[styles.tab, isSupplier && styles.tabActive]}
+            >
+              <Feather
+                name="truck"
+                size={14}
+                color={isSupplier ? colors.onBrandPrimary : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.tabTxt,
+                  { color: isSupplier ? colors.onBrandPrimary : colors.muted },
+                ]}
+              >
+                Fournisseur
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.title}>
+            {isSupplier ? "Espace fournisseur" : "Connexion"}
+          </Text>
+          <Text style={styles.subtitle}>
+            {isSupplier
+              ? "Réservé à Leray-Pointel — gestion du catalogue et des commandes."
+              : "Connectez-vous à votre compte entreprise"}
+          </Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>Email professionnel</Text>
+            <Text style={styles.label}>
+              {isSupplier ? "Email fournisseur" : "Email professionnel"}
+            </Text>
             <TextInput
               testID="login-email-input"
               value={email}
               onChangeText={setEmail}
-              placeholder="contact@entreprise.fr"
+              placeholder={
+                isSupplier ? "admin@leray-pointel.fr" : "contact@entreprise.fr"
+              }
               placeholderTextColor={colors.muted}
               autoCapitalize="none"
               keyboardType="email-address"
@@ -120,18 +174,29 @@ export default function Login() {
             {busy ? (
               <ActivityIndicator color={colors.onBrandPrimary} />
             ) : (
-              <Text style={styles.ctaTxt}>Se connecter</Text>
+              <Text style={styles.ctaTxt}>
+                {isSupplier ? "Accéder à mon espace" : "Se connecter"}
+              </Text>
             )}
           </Pressable>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
-            <Link href="/(auth)/register" asChild>
-              <Pressable testID="go-to-register-button">
-                <Text style={styles.footerLink}>Créer un compte</Text>
-              </Pressable>
-            </Link>
-          </View>
+          {isSupplier ? (
+            <View style={styles.supplierNotice} testID="supplier-notice">
+              <Feather name="info" size={13} color={colors.onBrandSecondary} />
+              <Text style={styles.supplierNoticeTxt}>
+                Les identifiants fournisseur sont fournis par Leray-Pointel.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.footer}>
+              <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
+              <Link href="/(auth)/register" asChild>
+                <Pressable testID="go-to-register-button">
+                  <Text style={styles.footerLink}>Créer un compte</Text>
+                </Pressable>
+              </Link>
+            </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -166,6 +231,41 @@ const useStyles = makeStyles((colors) => ({
   heroTitle: { color: colors.onSurfaceInverse, fontSize: 32, fontWeight: "800" },
   heroSub: { color: colors.onSurfaceInverse, fontSize: 15, marginTop: 4, opacity: 0.9 },
   form: { padding: 24, gap: 16 },
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: colors.brandPrimary,
+  },
+  tabTxt: { fontSize: 13, fontWeight: "700" },
+  supplierNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.brandSecondary,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  supplierNoticeTxt: {
+    color: colors.onBrandSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
   title: { fontSize: 24, fontWeight: "800", color: colors.onSurface },
   subtitle: { fontSize: 14, color: colors.muted, marginBottom: 8 },
   field: { gap: 6 },
