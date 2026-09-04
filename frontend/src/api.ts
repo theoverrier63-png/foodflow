@@ -134,6 +134,7 @@ export const api = {
   adminDeleteProduct: (id: string) =>
     request<void>(`/admin/products/${id}`, { method: "DELETE" }),
   adminOrders: () => request<Order[]>("/admin/orders"),
+  adminGetOrder: (id: string) => request<Order>(`/admin/orders/${id}`),
   adminUpdateStatus: (id: string, status: string) =>
     request<Order>(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   adminInvoice: (id: string) =>

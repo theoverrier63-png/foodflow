@@ -190,7 +190,16 @@ export default function AdminOrders() {
           renderItem={({ item }) => {
             const sc = statusColor(item.status);
             return (
-              <View style={styles.card} testID={`admin-order-${item.id}`}>
+              <Pressable
+                testID={`admin-order-${item.id}`}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(admin)/order-detail",
+                    params: { id: item.id },
+                  })
+                }
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+              >
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.company} numberOfLines={1}>
@@ -206,7 +215,10 @@ export default function AdminOrders() {
                   </View>
                   <Pressable
                     testID={`status-${item.id}`}
-                    onPress={() => setTarget(item)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setTarget(item);
+                    }}
                     style={[styles.chipBtn, { backgroundColor: sc.bg }]}
                   >
                     <Text style={[styles.chipBtnTxt, { color: sc.fg }]}>{item.status}</Text>
@@ -221,14 +233,17 @@ export default function AdminOrders() {
                   </Text>
                   <Pressable
                     testID={`invoice-${item.id}`}
-                    onPress={() => downloadInvoice(item)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      downloadInvoice(item);
+                    }}
                     style={styles.invoiceBtn}
                   >
                     <Feather name="download" size={14} color={colors.brandPrimary} />
                     <Text style={styles.invoiceTxt}>Facture</Text>
                   </Pressable>
                 </View>
-              </View>
+              </Pressable>
             );
           }}
         />

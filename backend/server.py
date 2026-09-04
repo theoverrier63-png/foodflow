@@ -425,6 +425,14 @@ async def admin_list_orders(_: dict = Depends(require_admin)):
     return docs
 
 
+@api.get("/admin/orders/{order_id}", response_model=Order)
+async def admin_get_order(order_id: str, _: dict = Depends(require_admin)):
+    doc = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Commande introuvable")
+    return doc
+
+
 @api.patch("/admin/orders/{order_id}", response_model=Order)
 async def admin_update_status(order_id: str, body: StatusUpdate, _: dict = Depends(require_admin)):
     updated = await db.orders.find_one_and_update(
