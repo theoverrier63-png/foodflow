@@ -28,6 +28,9 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGO = "HS256"
 JWT_TTL_DAYS = 30
 
+# Supplier signup gate — allows creating admin accounts
+SUPPLIER_ACCESS_CODE = os.environ.get("SUPPLIER_ACCESS_CODE", "LRPT2026")
+
 app = FastAPI(title="Leray-Pointel B2B API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
@@ -55,6 +58,21 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def norm_email(cls, v):
+        return str(v).strip().lower()
+
+
+class SupplierRegisterIn(BaseModel):
+    company_name: str = Field(min_length=2, max_length=200)
+    siret: str = Field(min_length=14, max_length=14, pattern=r"^\d{14}$")
+    email: EmailStr
+    phone: str = Field(min_length=6, max_length=30)
+    delivery_address: str = Field(min_length=5, max_length=500)
+    password: str = Field(min_length=6, max_length=128)
+    access_code: str = Field(min_length=1, max_length=100)
 
     @field_validator("email")
     @classmethod
@@ -240,8 +258,6 @@ async def startup():
     # Seed default supplier (admin) account
     admin_email = "sarlleraypointel@orange.fr"
     admin_password = "teste123"
-    # Migration: remove any legacy admin created under a previous email
-    await db.users.delete_many({"role": "admin", "email": {"$ne": admin_email}})
     admin = await db.users.find_one({"email": admin_email})
     if not admin:
         try:
@@ -309,6 +325,29 @@ async def login(body: LoginIn):
     if not doc or not verify_password(body.password, doc["password_hash"]):
         raise HTTPException(401, "Email ou mot de passe incorrect")
     return {"access_token": make_token(doc["id"]), "token_type": "bearer", "user": user_public(doc)}
+
+
+@api.post("/auth/register-supplier", response_model=TokenOut, status_code=201)
+async def register_supplier(body: SupplierRegisterIn):
+    if body.access_code.strip() != SUPPLIER_ACCESS_CODE:
+        raise HTTPException(403, "Code d'accès fournisseur invalide")
+    user_id = str(uuid.uuid4())
+    doc = {
+        "id": user_id,
+        "company_name": body.company_name.strip(),
+        "siret": body.siret.strip(),
+        "email": body.email,
+        "phone": body.phone.strip(),
+        "delivery_address": body.delivery_address.strip(),
+        "password_hash": hash_password(body.password),
+        "role": "admin",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await db.users.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(409, "Email ou SIRET déjà enregistré")
+    return {"access_token": make_token(user_id), "token_type": "bearer", "user": user_public(doc)}
 
 
 @api.get("/auth/me", response_model=UserOut)

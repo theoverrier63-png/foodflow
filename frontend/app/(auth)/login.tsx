@@ -189,6 +189,14 @@ export default function Login() {
                 </Text>
               </View>
               <View style={styles.footer}>
+                <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
+                <Link href="/(auth)/register-supplier" asChild>
+                  <Pressable testID="go-to-register-supplier-button" hitSlop={8}>
+                    <Text style={styles.footerLink}>Créer un compte fournisseur</Text>
+                  </Pressable>
+                </Link>
+              </View>
+              <View style={styles.footerAlt}>
                 <Text style={styles.footerTxt}>Vous êtes un client ?</Text>
                 <Pressable
                   testID="switch-to-company-button"
@@ -301,6 +309,7 @@ const useStyles = makeStyles((colors) => ({
   },
   ctaTxt: { color: colors.onBrandPrimary, fontSize: 16, fontWeight: "700" },
   footer: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 12 },
+  footerAlt: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 4 },
   footerTxt: { color: colors.muted, fontSize: 14 },
   footerLink: { color: colors.brandPrimary, fontSize: 14, fontWeight: "700" },
 }));
