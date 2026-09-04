@@ -114,19 +114,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  registerSupplier: (body: {
-    company_name: string;
-    siret: string;
-    email: string;
-    phone: string;
-    delivery_address: string;
-    password: string;
-    access_code: string;
-  }) =>
-    request<{ access_token: string; user: User }>("/auth/register-supplier", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
   me: () => request<User>("/auth/me"),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),

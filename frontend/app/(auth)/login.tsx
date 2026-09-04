@@ -183,20 +183,13 @@ export default function Login() {
           {isSupplier ? (
             <>
               <View style={styles.supplierNotice} testID="supplier-notice">
-                <Feather name="info" size={13} color={colors.onBrandSecondary} />
+                <Feather name="lock" size={13} color={colors.onBrandSecondary} />
                 <Text style={styles.supplierNoticeTxt}>
-                  Les identifiants fournisseur sont fournis par Leray-Pointel.
+                  Espace réservé à Leray-Pointel. Les identifiants sont fournis en interne
+                  et ne peuvent pas être créés depuis l'application.
                 </Text>
               </View>
               <View style={styles.footer}>
-                <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
-                <Link href="/(auth)/register-supplier" asChild>
-                  <Pressable testID="go-to-register-supplier-button" hitSlop={8}>
-                    <Text style={styles.footerLink}>Créer un compte fournisseur</Text>
-                  </Pressable>
-                </Link>
-              </View>
-              <View style={styles.footerAlt}>
                 <Text style={styles.footerTxt}>Vous êtes un client ?</Text>
                 <Pressable
                   testID="switch-to-company-button"
