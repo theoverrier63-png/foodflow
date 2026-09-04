@@ -140,7 +140,7 @@ export default function Login() {
               value={email}
               onChangeText={setEmail}
               placeholder={
-                isSupplier ? "SARLleraypointel@orange.fr" : "contact@entreprise.fr"
+                isSupplier ? "sarl.leraypointel@orange.fr" : "contact@entreprise.fr"
               }
               placeholderTextColor={colors.muted}
               autoCapitalize="none"

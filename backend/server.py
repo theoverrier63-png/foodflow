@@ -238,9 +238,9 @@ async def startup():
         logger.info(f"Seeded {len(docs)} products")
 
     # Seed default supplier (admin) account — only Leray-Pointel has admin access.
-    admin_email = "sarlleraypointel@orange.fr"
-    admin_password = "teste123"
-    # Lock supplier space to Leray-Pointel: remove any stray admin accounts.
+    admin_email = "sarl.leraypointel@orange.fr"
+    admin_password = "Loic76930@"
+    # Lock supplier space to Leray-Pointel: remove any stray/legacy admin accounts.
     await db.users.delete_many({"role": "admin", "email": {"$ne": admin_email}})
     admin = await db.users.find_one({"email": admin_email})
     if not admin:
@@ -260,7 +260,7 @@ async def startup():
         except DuplicateKeyError:
             pass
     else:
-        # Keep the password aligned with the configured one on every start
+        # Keep the seeded password aligned on every start
         await db.users.update_one(
             {"email": admin_email},
             {"$set": {
