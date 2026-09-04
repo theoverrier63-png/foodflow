@@ -237,25 +237,38 @@ async def startup():
         await db.products.insert_many(docs)
         logger.info(f"Seeded {len(docs)} products")
 
-    # Seed default admin
-    admin_email = "admin@leray-pointel.fr"
+    # Seed default supplier (admin) account
+    admin_email = "sarlleraypointel@orange.fr"
+    admin_password = "teste123"
+    # Migration: remove any legacy admin created under a previous email
+    await db.users.delete_many({"role": "admin", "email": {"$ne": admin_email}})
     admin = await db.users.find_one({"email": admin_email})
     if not admin:
         try:
             await db.users.insert_one({
                 "id": str(uuid.uuid4()),
-                "company_name": "Leray-Pointel (Admin)",
+                "company_name": "SARL Leray-Pointel",
                 "siret": "00000000000000",
                 "email": admin_email,
                 "phone": "+33100000000",
                 "delivery_address": "Siège Leray-Pointel",
-                "password_hash": hash_password("admin1234"),
+                "password_hash": hash_password(admin_password),
                 "role": "admin",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-            logger.info("Seeded admin account admin@leray-pointel.fr")
+            logger.info(f"Seeded supplier account {admin_email}")
         except DuplicateKeyError:
             pass
+    else:
+        # Keep the password aligned with the configured one on every start
+        await db.users.update_one(
+            {"email": admin_email},
+            {"$set": {
+                "password_hash": hash_password(admin_password),
+                "company_name": "SARL Leray-Pointel",
+                "role": "admin",
+            }},
+        )
 
 
 @app.on_event("shutdown")
