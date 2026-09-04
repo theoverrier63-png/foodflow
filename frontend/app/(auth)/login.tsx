@@ -181,12 +181,24 @@ export default function Login() {
           </Pressable>
 
           {isSupplier ? (
-            <View style={styles.supplierNotice} testID="supplier-notice">
-              <Feather name="info" size={13} color={colors.onBrandSecondary} />
-              <Text style={styles.supplierNoticeTxt}>
-                Les identifiants fournisseur sont fournis par Leray-Pointel.
-              </Text>
-            </View>
+            <>
+              <View style={styles.supplierNotice} testID="supplier-notice">
+                <Feather name="info" size={13} color={colors.onBrandSecondary} />
+                <Text style={styles.supplierNoticeTxt}>
+                  Les identifiants fournisseur sont fournis par Leray-Pointel.
+                </Text>
+              </View>
+              <View style={styles.footer}>
+                <Text style={styles.footerTxt}>Vous êtes un client ?</Text>
+                <Pressable
+                  testID="switch-to-company-button"
+                  onPress={() => setMode("company")}
+                  hitSlop={8}
+                >
+                  <Text style={styles.footerLink}>Connexion entreprise</Text>
+                </Pressable>
+              </View>
+            </>
           ) : (
             <View style={styles.footer}>
               <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
