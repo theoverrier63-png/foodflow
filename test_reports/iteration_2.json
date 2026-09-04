@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 2 — Admin panel testing (backend + frontend). Backend: 15/15 admin tests PASS (auth+role gating, /admin/statuses, product CRUD with 404s, order list/status/PATCH with 422 for invalid status, invoice CSV with 'Facture,Leray-Pointel' and 'Total HT', /admin/orders/export). Regression: 29/30 previous tests pass; single pre-existing failure test_list_products_15 expects exactly 15 products but 16 exist (leftover from prior manual admin creation via UI/DB) — NOT a regression from admin panel. Frontend: admin@leray-pointel.fr logs in and is routed to /(admin) dashboard showing KPIs (6 Commandes, 4 En attente, 264.40 € CA) and 3 action rows; nav-orders navigates to /orders (6 orders with status chips and invoice buttons); status modal opens and updating to 'Validée' works with success toast; nav-products lists 15 products with edit + delete buttons; add-product-btn opens product-edit form (Nouveau produit) with all fields; regular user (test@leray.fr) lands on (app) catalogue and cannot access /(admin) (AuthGate redirects). Admin logout icon works via testID 'admin-logout'. No deprecated Expo packages, no red screen, no CORS/network errors on core flows.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/products", "issue": "Regression test test_list_products_15 fails because DB now has 16 products (test data hygiene: not a code bug). Consider updating the assertion to '>=15' or seeding a fresh DB before running."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/admin_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Fix test_list_products_15 hygiene: reset test DB or change assertion to '>=15' since admin can now add products.",
+    "(Optional) Add testIDs on product-edit form inputs (e.g. product-name-input, product-category-input, product-price-input, product-save-btn) to make future automated tests more robust — form works but is currently only reachable via visual placeholders."
+  ],
+  "critical_code_review_comments": [
+    "server.py uses deprecated FastAPI @app.on_event('startup'/'shutdown') hooks — consider migrating to lifespan handlers.",
+    "login.tsx always calls router.replace('/(app)') after signIn; the AuthGate in _layout.tsx correctly re-routes admins to /(admin), so this works, but it triggers a brief double navigation. Could redirect based on user.role directly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15 admin) / 96.7% (29/30 total incl. pre-existing test_list_products_15 stale-data failure)", "frontend": "100% of admin panel flows verified"},
+  "seed_data_creation": "None. Admin account is auto-seeded by server startup. Tests use test@leray.fr / Test1234! (registered if missing).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin panel iteration 2 verified end-to-end on public URL. If running full backend suite, expect test_list_products_15 to fail with 16 products; that assertion is stale, not a code bug. Frontend admin routes: /(admin), /orders, /products, /product-edit. Admin key testIDs: nav-orders, nav-products, nav-export, admin-logout, add-product-btn, edit-{id}, delete-{id}, status-{id}, set-status-{Statut}, invoice-{id}, confirm-delete, back-btn.",
+  "rca_of_issue": "test_list_products_15 pre-existing failure — root cause: DB has an extra product (either seeded twice historically or created via admin UI in a prior manual session). Not related to this iteration's changes. Mitigation: either drop products collection and let seed run, or relax the assertion to >=15."
+}

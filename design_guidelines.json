@@ -1,0 +1,165 @@
+{
+  "app_name": "Leray-Pointel App",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A hyper-functional, high-contrast B2B wholesale platform where fresh produce imagery stands out against a strictly disciplined, clean interface.",
+  "color": {
+    "surface": "#F9FAFB",
+    "onSurface": "#111827",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#111827",
+    "surfaceTertiary": "#F3F4F6",
+    "onSurfaceTertiary": "#374151",
+    "surfaceInverse": "#111827",
+    "onSurfaceInverse": "#F9FAFB",
+    "brand": "#194B32",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#194B32",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E8F3EC",
+    "onBrandSecondary": "#194B32",
+    "brandTertiary": "#D1E6D9",
+    "onBrandTertiary": "#143C28",
+    "success": "#059669",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D97706",
+    "onWarning": "#FFFFFF",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E7EB",
+    "borderStrong": "#D1D5DB",
+    "divider": "#F3F4F6",
+    "muted": "#6B7280"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "DM Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous touch targets (min 56pt for list items, 48pt for buttons). Minimal padding on main lists to maximize vertical scanning space. One main sticky action per screen.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 16,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use frosted glass on the bottom tab bar and sticky bottom CTA wrappers.",
+      "Use subtle blur under sticky category headers on the catalog."
+    ],
+    "dont's": [
+      "Do not use glass on product cards or list rows to maintain extreme clarity for fast B2B ordering."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "haptics": {
+    "events": {
+      "add_to_cart": "selection",
+      "increase_quantity": "light",
+      "decrease_quantity": "light",
+      "submit_order": "success",
+      "tab_press": "light"
+    }
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Company registration and login.",
+      "states": {
+        "loading": "Spinner over brandPrimary button.",
+        "empty": "N/A",
+        "error": "Inline text below input field (e.g., 'SIRET invalide')."
+      },
+      "layout": "Minimalist single-column form. Fields: Nom entreprise, SIRET, Email, Téléphone, Adresse de livraison, Mot de passe. Labels above inputs. Sticky 'Créer mon compte' button at bottom using KeyboardAvoidingView. Minimal visual chrome; focus entirely on data entry."
+    },
+    {
+      "name": "Catalog",
+      "purpose": "Browse fresh produce and quickly add to cart.",
+      "states": {
+        "loading": "Skeleton rows of product items.",
+        "empty": "Illustration of empty crate. 'Aucun produit disponible.'",
+        "error": "Text: 'Erreur de chargement du catalogue.' Button: 'Réessayer'."
+      },
+      "layout": "Top sticky header with search bar and horizontal scrollable category chips (Fruits, Légumes, Herbes). Below, vertical list of products (plane stack approach). Each row has product name, origin, unit size (e.g., 'Cagette 5kg'), price, and a large 'hitSlop' + button to add to cart instantly without opening a detail view."
+    },
+    {
+      "name": "Cart",
+      "purpose": "Review selected items and place invoice order.",
+      "states": {
+        "loading": "Spinner centered.",
+        "empty": "Image of empty basket (images.cart_empty). Text: 'Votre panier est vide.'",
+        "error": "Text: 'Erreur lors de la validation.' Button: 'Réessayer'."
+      },
+      "layout": "List of cart items with prominent +/- stepper controls for quantities. Subtotal at the bottom. Notice text: 'Paiement hors application (Facturation)'. Sticky bottom CTA 'Valider la commande' in a glass wrapper."
+    },
+    {
+      "name": "Order History",
+      "purpose": "Track past and current orders.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "Text: 'Aucune commande passée.' CTA: 'Voir le catalogue'.",
+        "error": "Text: 'Erreur de chargement de l'historique.' Button: 'Réessayer'."
+      },
+      "layout": "Vertical list of order cards. Each card shows Date, Order ID, Total, and a status chip (En attente, Validée, Livrée) using brandTertiary for active, surfaceTertiary for past."
+    }
+  ],
+  "images": {
+    "hero_produce": {
+      "url": "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMHdob2xlc2FsZSUyMHZlZ2V0YWJsZXMlMjBjcmF0ZXxlbnwwfHx8fDE3ODg1NDgxNzN8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Crate of fresh wholesale vegetables"
+    },
+    "category_fruits": {
+      "url": "https://images.unsplash.com/photo-1568391047493-d859d5ddb509?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMGNvbG9yZnVsJTIwZnJ1aXRzJTIwbWFya2V0fGVufDB8fHx8MTc4ODU0ODE3M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Fresh colorful fruits at the market"
+    },
+    "cart_empty": {
+      "url": "https://images.unsplash.com/photo-1628102490959-a5b3c905fb9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGdyb2NlcnklMjBzaG9wcGluZyUyMGJhc2tldHxlbnwwfHx8fDE3ODg1NDgxNzN8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty grocery shopping basket"
+    },
+    "logo_fallback": {
+      "url": "https://images.unsplash.com/photo-1488459716781-31db52582fe9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMGNvbG9yZnVsJTIwZnJ1aXRzJTIwbWFya2V0fGVufDB8fHx8MTc4ODU0ODE3M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Leray-Pointel abstract brand fallback image"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Implement the '1 iOS-Native Clean' personality with a focus on B2B functionality.",
+    "Do NOT use blue or purple anywhere. Use the defined 'brand' Forest Green (#194B32) for primary actions.",
+    "Form inputs must support SIRET format, telephone, email, password, and delivery address per the problem statement.",
+    "Cart checkout MUST NOT include a payment gateway. Display a notice 'Paiement hors app / Facturation' and submit the order as an invoice request.",
+    "List items in the Catalog should optimize for speed: include a large tap target 'Add to Cart' button directly on the list row so users don't have to enter the detail screen.",
+    "Use a gradient scrim over the hero or cover images to ensure text contrast (text must use onSurfaceInverse).",
+    "Sticky CTAs ('Créer mon compte', 'Valider la commande') must sit above the home indicator, backed by frosted glass (expo-blur) or a solid surface to avoid content collision."
+  ]
+}
