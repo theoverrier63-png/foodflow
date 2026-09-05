@@ -13,7 +13,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Order } from "@/src/api";
 import { useToast } from "@/src/toast";
-import { downloadAuthedFile } from "@/src/download";
+import { downloadAuthedFile, printAuthedPdf } from "@/src/download";
 import { formatQty, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -97,6 +97,19 @@ export default function AdminOrderDetail() {
       toast.show("Facture téléchargée", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
+    }
+  }
+
+  async function printInvoice() {
+    if (!order) return;
+    try {
+      await printAuthedPdf(
+        api.adminInvoice(order.id),
+        `facture-${order.id.slice(0, 8)}.pdf`,
+      );
+      toast.show("Envoi à l'impression…", "info");
+    } catch (e: any) {
+      toast.show(e?.message || "Impression impossible", "error");
     }
   }
 
@@ -263,12 +276,20 @@ export default function AdminOrderDetail() {
       {/* Sticky invoice CTA */}
       <View style={[styles.stickyCta, { paddingBottom: insets.bottom + 12 }]}>
         <Pressable
+          testID="detail-print-btn"
+          onPress={printInvoice}
+          style={({ pressed }) => [styles.secondaryCta, pressed && { opacity: 0.85 }]}
+        >
+          <Feather name="printer" size={18} color={colors.brandPrimary} />
+          <Text style={styles.secondaryCtaTxt}>Imprimer</Text>
+        </Pressable>
+        <Pressable
           testID="detail-invoice-btn"
           onPress={downloadInvoice}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
         >
           <Feather name="download" size={18} color={colors.onBrandPrimary} />
-          <Text style={styles.ctaTxt}>Télécharger la facture (PDF)</Text>
+          <Text style={styles.ctaTxt}>Télécharger le PDF</Text>
         </Pressable>
       </View>
 
@@ -497,8 +518,11 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    flexDirection: "row",
+    gap: 10,
   },
   cta: {
+    flex: 1,
     backgroundColor: colors.brandPrimary,
     paddingVertical: 15,
     borderRadius: 12,
@@ -507,7 +531,20 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: "center",
     gap: 8,
   },
-  ctaTxt: { color: colors.onBrandPrimary, fontSize: 15, fontWeight: "700" },
+  ctaTxt: { color: colors.onBrandPrimary, fontSize: 14, fontWeight: "700" },
+  secondaryCta: {
+    paddingVertical: 15,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.surface,
+  },
+  secondaryCtaTxt: { color: colors.brandPrimary, fontSize: 14, fontWeight: "700" },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
