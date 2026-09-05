@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         pointerEvents="none"
         style={[
           styles.wrap,
-          { top: insets.top + 12, opacity, backgroundColor: bg },
+          { top: insets.top + 12, opacity, backgroundColor: bg, pointerEvents: "none" },
         ]}
         testID="toast"
       >

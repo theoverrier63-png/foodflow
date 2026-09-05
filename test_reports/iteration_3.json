@@ -1,0 +1,27 @@
+{
+  "summary": "Verified the 'Au kilo / À la pièce' selector fix on product-detail via Playwright (mobile viewport 390x844). Both chips are now Pressable (previously View), receive tap events, are locatable by testIDs unit-kg and unit-piece. For Pommes Gala (sell_unit=kg): 'Au kilo' shows active with check icon + brand background, 'À la pièce' is greyed; tapping 'À la pièce' displays toast 'Ce produit est vendu au kilo uniquement'; tapping the active chip is a no-op (toast opacity=0). For Basilic frais in Herbes (sell_unit=piece): mirror behaviour — tapping 'Au kilo' displays 'Ce produit est vendu à la pièce uniquement'. Regression pass: qty stepper +/-, decimal-pad for kg vs number-pad for piece, subtotal recomputes (2 × 1.50 € = 3.00 €), and 'Ajouter au panier' adds the correct line (cart badge = 1, success toast 'Basilic frais : 2 pce ajouté(s)'). Bug fix confirmed. Minor RN deprecation warning: props.pointerEvents (used by ToastProvider Animated.View); non-blocking.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: /app/frontend/src/toast.tsx:38"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "Optional cleanup: move pointerEvents='none' from the prop to the style object in ToastProvider (src/toast.tsx line 38) to silence the RN deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "UnitChip correctly uses Pressable and onPress; active/available styles are clean and testIDs are propagated as intended.",
+    "Toast uses pointerEvents as a prop instead of style — deprecated in newer RN; harmless but noisy in console."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run)", "frontend": "100% (5/5 scenarios pass)"},
+  "seed_data_creation": "None — used existing seeded products (Pommes Gala for kg, Basilic frais for piece).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login: test@leray.fr / Test1234!. Product-detail chips have testIDs unit-kg / unit-piece; toast has testID 'toast'. Active chip tap = no-op (toast stays hidden, opacity 0). Non-matching chip tap = French info toast.",
+  "rca_of_issue": "Root cause: UnitChip was rendered as a plain View, so onPress/tap events could not fire. Fix (already applied by main agent): converted UnitChip to a Pressable, forwarded onPress, and wired the parent's handler to show a French info toast when the tapped chip does not match product.sell_unit. Verified end-to-end for both kg and piece products."
+}

@@ -144,16 +144,34 @@ export default function ProductDetail() {
             <Text style={styles.sectionTitle}>Unité de vente</Text>
             <View style={styles.unitRow}>
               <UnitChip
+                testID="unit-kg"
                 icon="package"
                 label="Au kilo"
                 active={product.sell_unit === "kg"}
-                disabled={product.sell_unit !== "kg"}
+                available={product.sell_unit === "kg"}
+                onPress={() => {
+                  if (product.sell_unit !== "kg") {
+                    toast.show(
+                      "Ce produit est vendu à la pièce uniquement",
+                      "info"
+                    );
+                  }
+                }}
               />
               <UnitChip
+                testID="unit-piece"
                 icon="box"
                 label="À la pièce"
                 active={product.sell_unit === "piece"}
-                disabled={product.sell_unit !== "piece"}
+                available={product.sell_unit === "piece"}
+                onPress={() => {
+                  if (product.sell_unit !== "piece") {
+                    toast.show(
+                      "Ce produit est vendu au kilo uniquement",
+                      "info"
+                    );
+                  }
+                }}
               />
             </View>
             <Text style={styles.unitHint}>
@@ -230,30 +248,37 @@ function UnitChip({
   icon,
   label,
   active,
-  disabled,
+  available,
+  onPress,
+  testID,
 }: {
   icon: string;
   label: string;
   active: boolean;
-  disabled: boolean;
+  available: boolean;
+  onPress: () => void;
+  testID?: string;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const fg = disabled ? colors.muted : active ? colors.onBrandPrimary : colors.onSurface;
+  const fg = !available ? colors.muted : active ? colors.onBrandPrimary : colors.onSurface;
   return (
-    <View
-      style={[
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      style={({ pressed }) => [
         styles.unitChip,
         active
           ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
           : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
-        disabled && { opacity: 0.55 },
+        !available && { opacity: 0.55 },
+        pressed && { opacity: 0.8 },
       ]}
     >
       <Feather name={icon as any} size={15} color={fg} />
       <Text style={[styles.unitChipTxt, { color: fg }]}>{label}</Text>
       {active ? <Feather name="check" size={14} color={fg} /> : null}
-    </View>
+    </Pressable>
   );
 }
 
