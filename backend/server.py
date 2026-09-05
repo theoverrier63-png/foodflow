@@ -13,6 +13,19 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors as rl_colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+from fastapi.responses import Response
 
 
 ROOT_DIR = Path(__file__).parent
@@ -359,6 +372,14 @@ async def list_orders(user: dict = Depends(current_user)):
     return docs
 
 
+@api.get("/orders/{order_id}/invoice-pdf")
+async def customer_invoice_pdf(order_id: str, user: dict = Depends(current_user)):
+    doc = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Commande introuvable")
+    return _pdf_response(doc)
+
+
 # ============================== ADMIN ROUTES ==============================
 
 ALLOWED_STATUSES = ["En attente", "Validée", "En préparation", "Livrée", "Annulée"]
@@ -453,32 +474,170 @@ def _csv_escape(v) -> str:
     return s
 
 
+def _generate_invoice_pdf(order: dict) -> bytes:
+    """Render a printable A4 invoice PDF for a given order document."""
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        title=f"Facture {order['id'][:8].upper()}",
+    )
+    brand = rl_colors.HexColor("#194B32")
+    muted = rl_colors.HexColor("#6B7280")
+    surface = rl_colors.HexColor("#F3F4F6")
+
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=20, textColor=brand, spaceAfter=2)
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=muted)
+    normal = ParagraphStyle("normal", parent=styles["Normal"], fontSize=10)
+    strong = ParagraphStyle("strong", parent=styles["Normal"], fontSize=10, textColor=brand, spaceAfter=2)
+    label = ParagraphStyle("label", parent=styles["Normal"], fontSize=8, textColor=muted, spaceAfter=2)
+
+    story = []
+
+    # ---------- Header (brand + invoice meta) ----------
+    header_data = [
+        [
+            Paragraph("<b>LERAY-POINTEL</b>", h1),
+            Paragraph("<b>FACTURE</b>", ParagraphStyle(
+                "invTitle", parent=h1, alignment=2, fontSize=18
+            )),
+        ],
+        [
+            Paragraph("Fruits &amp; légumes frais — vente en gros", small),
+            Paragraph(
+                f"N° {order['id'][:8].upper()}<br/>"
+                f"Date : {order['created_at'][:10]}",
+                ParagraphStyle("meta", parent=small, alignment=2, fontSize=9),
+            ),
+        ],
+    ]
+    header_table = Table(header_data, colWidths=[95 * mm, 75 * mm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 10 * mm))
+
+    # ---------- Parties (supplier + client) ----------
+    supplier_html = (
+        "<b>SARL Leray-Pointel</b><br/>"
+        "Siège Leray-Pointel<br/>"
+        "France<br/>"
+        "sarl.leraypointel@orange.fr"
+    )
+    client_html = (
+        f"<b>{order['company_name']}</b><br/>"
+        f"{order['delivery_address']}"
+    )
+    parties = Table(
+        [
+            [Paragraph("ÉMETTEUR", label), Paragraph("CLIENT", label)],
+            [Paragraph(supplier_html, normal), Paragraph(client_html, normal)],
+        ],
+        colWidths=[85 * mm, 85 * mm],
+    )
+    parties.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), surface),
+        ("BOX", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#E5E7EB")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, rl_colors.HexColor("#E5E7EB")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(parties)
+    story.append(Spacer(1, 8 * mm))
+
+    # ---------- Status ----------
+    story.append(Paragraph(f"<b>Statut :</b> {order['status']}", normal))
+    story.append(Spacer(1, 4 * mm))
+
+    # ---------- Products table ----------
+    items_data = [["Produit", "Unité", "Qté", "PU HT (€)", "Total HT (€)"]]
+    for it in order["items"]:
+        items_data.append([
+            it["name"],
+            it["unit"],
+            str(it["quantity"]),
+            f"{it['price']:.2f}",
+            f"{it['price'] * it['quantity']:.2f}",
+        ])
+    items_table = Table(items_data, colWidths=[65 * mm, 40 * mm, 15 * mm, 25 * mm, 25 * mm])
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), brand),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, surface]),
+        ("GRID", (0, 0), (-1, -1), 0.4, rl_colors.HexColor("#E5E7EB")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 6 * mm))
+
+    # ---------- Totals ----------
+    totals_table = Table(
+        [
+            ["Total HT", f"{order['total']:.2f} €"],
+        ],
+        colWidths=[145 * mm, 25 * mm],
+    )
+    totals_table.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 12),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (1, 0), (1, -1), brand),
+        ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEABOVE", (0, 0), (-1, 0), 1, brand),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(totals_table)
+
+    if order.get("notes"):
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph("<b>Note du client</b>", strong))
+        story.append(Paragraph(order["notes"], normal))
+
+    story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph(
+        "Paiement hors application — facturation. Merci de votre confiance.",
+        small,
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _pdf_response(order: dict) -> Response:
+    pdf = _generate_invoice_pdf(order)
+    filename = f"facture-{order['id'][:8]}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @api.get("/admin/orders/{order_id}/invoice")
 async def admin_invoice(order_id: str, _: dict = Depends(require_admin)):
     o = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not o:
         raise HTTPException(404, "Commande introuvable")
-    lines = []
-    lines.append("Facture,Leray-Pointel")
-    lines.append(f"Numéro,{_csv_escape('#' + o['id'][:8].upper())}")
-    lines.append(f"Date,{_csv_escape(o['created_at'])}")
-    lines.append(f"Client,{_csv_escape(o['company_name'])}")
-    lines.append(f"Adresse de livraison,{_csv_escape(o['delivery_address'])}")
-    lines.append(f"Statut,{_csv_escape(o['status'])}")
-    lines.append("")
-    lines.append("Produit,Unité,Quantité,Prix unitaire HT,Total HT")
-    for it in o["items"]:
-        lines.append(",".join([
-            _csv_escape(it["name"]),
-            _csv_escape(it["unit"]),
-            _csv_escape(it["quantity"]),
-            _csv_escape(f"{it['price']:.2f}"),
-            _csv_escape(f"{it['price'] * it['quantity']:.2f}"),
-        ]))
-    lines.append("")
-    lines.append(f"Total HT,{_csv_escape(format(o['total'], '.2f'))}")
-    csv_text = "\n".join(lines)
-    return {"filename": f"facture-{o['id'][:8]}.csv", "content": csv_text, "order": o}
+    return _pdf_response(o)
 
 
 @api.get("/admin/orders/export")

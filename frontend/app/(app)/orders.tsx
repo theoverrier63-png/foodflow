@@ -12,6 +12,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Order } from "@/src/api";
+import { downloadAuthedFile } from "@/src/download";
+import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
 
 function formatDate(iso: string) {
@@ -34,11 +36,24 @@ export default function Orders() {
   const styles = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
+  const toast = useToast();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function downloadInvoice(order: Order) {
+    try {
+      await downloadAuthedFile(
+        api.customerInvoice(order.id),
+        `facture-${order.id.slice(0, 8)}.pdf`,
+      );
+      toast.show("Facture téléchargée", "success");
+    } catch (e: any) {
+      toast.show(e?.message || "Erreur", "error");
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -147,8 +162,18 @@ export default function Orders() {
                 )}
                 <View style={styles.divider} />
                 <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Total HT</Text>
-                  <Text style={styles.totalVal}>{item.total.toFixed(2)} €</Text>
+                  <View>
+                    <Text style={styles.totalLabel}>Total HT</Text>
+                    <Text style={styles.totalVal}>{item.total.toFixed(2)} €</Text>
+                  </View>
+                  <Pressable
+                    testID={`invoice-${item.id}`}
+                    onPress={() => downloadInvoice(item)}
+                    style={styles.invoiceBtn}
+                  >
+                    <Feather name="download" size={14} color={colors.brandPrimary} />
+                    <Text style={styles.invoiceTxt}>Facture PDF</Text>
+                  </Pressable>
                 </View>
               </View>
             );
@@ -204,4 +229,14 @@ const useStyles = makeStyles((colors) => ({
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { fontSize: 13, color: colors.muted },
   totalVal: { fontSize: 18, fontWeight: "800", color: colors.brandPrimary },
+  invoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.brandSecondary,
+  },
+  invoiceTxt: { color: colors.brandPrimary, fontWeight: "700", fontSize: 12 },
 }));

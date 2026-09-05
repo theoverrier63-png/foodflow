@@ -15,7 +15,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Order } from "@/src/api";
 import { useToast } from "@/src/toast";
-import { downloadCsv } from "@/src/download";
+import { downloadAuthedFile, downloadCsv } from "@/src/download";
 import { makeStyles, useTheme } from "@/src/theme";
 
 function formatDate(iso: string) {
@@ -91,8 +91,10 @@ export default function AdminOrders() {
 
   async function downloadInvoice(order: Order) {
     try {
-      const res = await api.adminInvoice(order.id);
-      await downloadCsv(res.filename, res.content);
+      await downloadAuthedFile(
+        api.adminInvoice(order.id),
+        `facture-${order.id.slice(0, 8)}.pdf`,
+      );
       toast.show("Facture téléchargée", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
@@ -240,7 +242,7 @@ export default function AdminOrders() {
                     style={styles.invoiceBtn}
                   >
                     <Feather name="download" size={14} color={colors.brandPrimary} />
-                    <Text style={styles.invoiceTxt}>Facture</Text>
+                    <Text style={styles.invoiceTxt}>Facture PDF</Text>
                   </Pressable>
                 </View>
               </Pressable>

@@ -138,7 +138,8 @@ export const api = {
   adminUpdateStatus: (id: string, status: string) =>
     request<Order>(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   adminInvoice: (id: string) =>
-    request<{ filename: string; content: string; order: Order }>(`/admin/orders/${id}/invoice`),
+    `/admin/orders/${id}/invoice`,
+  customerInvoice: (id: string) => `/orders/${id}/invoice-pdf`,
   adminExportAll: () =>
     request<{ filename: string; content: string; count: number }>("/admin/orders/export"),
 };
