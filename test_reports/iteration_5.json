@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 5 — Six-in-one batch verified end-to-end. Backend: 14/14 pytest cases pass in /app/backend/tests/test_iter5.py covering (1) POST /auth/register-personal returns 201 with account_type='personal' + status='approved' + siret='' + immediate order allowed, plus 422 on missing/invalid, 409 on duplicate; (2) POST /auth/register returns account_type='business' + status='pending'; (3) POST /orders with pending business token → 403 with French 'attente/validation' message; (4) GET /admin/pending lists only business+pending users, 403 for non-admin, POST /admin/pending/{id}/approve → status='approved' (and pending user can now order), /reject → status='rejected', unknown id → 404; (5) GET /banner returns {image_url:null} by default, PUT /admin/banner with data-URL sets it and GET returns it, DELETE removes it, PUT forbidden for non-admin. Frontend: Login shows 3 tabs (tab-company, tab-personal, tab-supplier); selecting tab-personal shows 'Créer un compte particulier' link that opens /(auth)/register-personal with all 5 required testIDs (pers-name, pers-email, pers-phone, pers-address, pers-password). Client product-detail on Pommes Gala: unit-piece chip shows 'À la pièce / sur devis' (NO '0.35 €'); selecting piece hides detail-price + detail-subtotal and CTA becomes 'Ajouter au panier' (no €); selecting kg restores detail-price=2.58 €, detail-subtotal, and CTA 'Ajouter au panier • 2.58 €'. Client Orders tab no longer contains any 'Facture PDF' button (no 'Facture' text anywhere on the screen; no invoice/pdf testID). Admin dashboard exposes nav-pending (opens 'Comptes pro en attente' — empty-state renders with 'Aucun compte en attente') and nav-banner (opens 'Bannière d'accueil' with 'Choisir une image' + Enregistrer). Admin product-edit shows the new 'Choisir une photo depuis la galerie' button with testID=pick-image-btn (smoke test only). Deprecated packages/RN issues detected: none new for this iteration (pre-existing pointerEvents deprecation warning still present in toast.tsx — carried over from iter 3/4).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' — carried over from prior iterations. Reference: /app/frontend/src/toast.tsx:38"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter5.py",
+    "/app/test_reports/pytest/iter5_results.xml",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "action_items": [
+    "Optional: move pointerEvents='none' from prop to style in /app/frontend/src/toast.tsx to silence the RN deprecation warning (pre-existing, non-blocking)."
+  ],
+  "critical_code_review_comments": [
+    "server.py `RegisterPersonalIn` + `/auth/register-personal` correctly force siret='', account_type='personal', status='approved' and re-use the same UserOut/TokenOut contract as business register.",
+    "server.py `/auth/register` now sets status='pending' unconditionally; DuplicateKeyError still returns 409 with the same French message.",
+    "server.py `/orders` create endpoint guards on user.status != 'approved' with HTTP 403 and French message 'Votre compte est en attente de validation par Leray-Pointel' — correctly gates pending business users while personal users (approved by default) can order immediately.",
+    "server.py `/admin/pending`, `/approve`, `/reject` are all admin-guarded via `require_admin`; approve/reject scope the update to account_type='business' so admin cannot flip a personal user's status (good).",
+    "server.py startup: SIRET index recreated as unique partial ({siret: {$gt: ''}}) — this correctly allows multiple personal users with siret='' while keeping business SIRETs unique. Verified indirectly by successful multiple personal registrations.",
+    "server.py startup migration: existing users are back-filled with account_type='business' + status='approved' (including the seeded admin), so already-live accounts remain functional. Verified: test@leray.fr is still able to place orders.",
+    "server.py `/banner` GET returns {image_url: None} when settings.banner is unset; PUT `/admin/banner` upserts a data-URL string (BannerIn limits to 5MB char length — reasonable safeguard); DELETE returns 204.",
+    "login.tsx exposes three segmented tabs with the exact required testIDs and routes personal users to /(auth)/register-personal via the Créer link.",
+    "register-personal.tsx has all five required field testIDs (pers-name/email/phone/address/password), validates client-side and calls signUpPersonal → /(app) redirect on success.",
+    "product-detail.tsx now hides the numeric detail-price line and detail-subtotal card when selectedUnit==='piece', shows 'Prix à la pièce sur devis' via detail-price-piece testID, and CTA drops the €amount — matching spec. UnitChip for piece receives showPrice={false} so the '0.35 €' price is NOT rendered in the chip.",
+    "(admin)/index.tsx dashboard exposes nav-pending and nav-banner rows that route to the new /(admin)/pending and /(admin)/banner screens; both render correctly.",
+    "product-edit.tsx exposes pick-image-btn using expo-image-picker (permissions can't be exercised via Playwright — smoke test only)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter5.py (new — 14 pytest cases)"
+  ],
+  "success_rate": {"backend": "100% (14/14 iter5 tests)", "frontend": "100% (login 3 tabs, register-personal fields, product-detail piece/kg toggle, orders no-Facture, admin dashboard nav-pending/nav-banner, product-edit pick-image-btn all verified)"},
+  "seed_data_creation": "Test-created business users (TEST Pending / TEST Reject) and personal users are left in Mongo (harmless — will show up in /admin/pending until admin approves/rejects). Test-set banner is deleted at end of banner tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin: sarl.leraypointel@orange.fr / Loic76930@ (tab-supplier). Client (approved business): test@leray.fr / Test1234! (tab-company). For personal-account testing, register a fresh user via POST /api/auth/register-personal — those accounts auto-approve. For pending flow: register via POST /api/auth/register with a fresh SIRET+email → user is pending → order blocked with 403 → approve via POST /api/admin/pending/{id}/approve → order succeeds. Product-detail testIDs: unit-kg, unit-piece, detail-price (kg only), detail-price-piece (piece only), detail-subtotal (kg only), detail-add-to-cart. Admin dashboard testIDs: nav-pending, nav-banner. Product-edit: pick-image-btn. Note: product-detail sticky CTA overlays the unit-piece chip at the small (375x667) viewport — must call `scroll_into_view_if_needed()` or use a taller viewport (e.g. 375x800) before clicking the piece chip; force=True on a normal click still hit the overlay and dispatched Ajouter au panier. Login page render occasionally emits duplicate DOM nodes for [data-testid='tab-company'] briefly during hydration — use `.first` on tab locators to be safe.",
+  "rca_of_issue": "N/A — this iteration is feature verification, not bug fixing. All six requested behaviors verified against the running backend and Expo web preview."
+}

@@ -143,10 +143,16 @@ export default function ProductDetail() {
             <View style={styles.dot} />
             <Text style={styles.meta}>{product.unit}</Text>
           </View>
-          <Text style={styles.price} testID="detail-price">
-            {price.toFixed(2)} € HT
-            <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
-          </Text>
+          {selectedUnit === "kg" ? (
+            <Text style={styles.price} testID="detail-price">
+              {price.toFixed(2)} € HT
+              <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
+            </Text>
+          ) : (
+            <Text style={styles.pricePiece} testID="detail-price-piece">
+              Prix à la pièce sur devis
+            </Text>
+          )}
 
           {/* Description */}
           <View style={styles.section}>
@@ -165,6 +171,7 @@ export default function ProductDetail() {
                 icon="package"
                 label="Au kilo"
                 price={product.price_kg}
+                showPrice
                 active={selectedUnit === "kg"}
                 available={units.includes("kg")}
                 onPress={() => chooseUnit("kg")}
@@ -174,6 +181,7 @@ export default function ProductDetail() {
                 icon="box"
                 label="À la pièce"
                 price={product.price_piece}
+                showPrice={false}
                 active={selectedUnit === "piece"}
                 available={units.includes("piece")}
                 onPress={() => chooseUnit("piece")}
@@ -219,12 +227,14 @@ export default function ProductDetail() {
                 <Feather name="plus" size={18} color={colors.onSurface} />
               </Pressable>
             </View>
-            <View style={styles.subtotal}>
-              <Text style={styles.subtotalLabel}>Sous-total HT</Text>
-              <Text style={styles.subtotalVal} testID="detail-subtotal">
-                {lineTotal.toFixed(2)} €
-              </Text>
-            </View>
+            {selectedUnit === "kg" ? (
+              <View style={styles.subtotal}>
+                <Text style={styles.subtotalLabel}>Sous-total HT</Text>
+                <Text style={styles.subtotalVal} testID="detail-subtotal">
+                  {lineTotal.toFixed(2)} €
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -242,7 +252,11 @@ export default function ProductDetail() {
           ) : (
             <>
               <Feather name="shopping-cart" size={18} color={colors.onBrandPrimary} />
-              <Text style={styles.ctaTxt}>Ajouter au panier • {lineTotal.toFixed(2)} €</Text>
+              <Text style={styles.ctaTxt}>
+                {selectedUnit === "kg"
+                  ? `Ajouter au panier • ${lineTotal.toFixed(2)} €`
+                  : "Ajouter au panier"}
+              </Text>
             </>
           )}
         </Pressable>
@@ -255,6 +269,7 @@ function UnitChip({
   icon,
   label,
   price,
+  showPrice = true,
   active,
   available,
   onPress,
@@ -263,6 +278,7 @@ function UnitChip({
   icon: string;
   label: string;
   price?: number | null;
+  showPrice?: boolean;
   active: boolean;
   available: boolean;
   onPress: () => void;
@@ -289,9 +305,15 @@ function UnitChip({
         <Text style={[styles.unitChipTxt, { color: fg }]}>{label}</Text>
         {active ? <Feather name="check" size={14} color={fg} /> : null}
       </View>
-      <Text style={[styles.unitChipPrice, { color: fg }]}>
-        {available && price != null ? `${price.toFixed(2)} €` : "—"}
-      </Text>
+      {showPrice ? (
+        <Text style={[styles.unitChipPrice, { color: fg }]}>
+          {available && price != null ? `${price.toFixed(2)} €` : "—"}
+        </Text>
+      ) : (
+        <Text style={[styles.unitChipPrice, { color: fg, fontSize: 11, fontWeight: "600" }]}>
+          {available ? "sur devis" : "—"}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -338,6 +360,13 @@ const useStyles = makeStyles((colors) => ({
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.muted },
   price: { fontSize: 22, fontWeight: "800", color: colors.brandPrimary, marginTop: 8 },
   priceUnit: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  pricePiece: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.muted,
+    marginTop: 8,
+    fontStyle: "italic",
+  },
 
   section: { marginTop: 16, gap: 10 },
   sectionTitle: {

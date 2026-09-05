@@ -147,6 +147,20 @@ export default function AdminDashboard() {
           onPress={() => router.push("/(admin)/products")}
         />
         <ActionRow
+          testID="nav-pending"
+          icon="user-check"
+          title="Comptes pro en attente"
+          subtitle="Approuver ou refuser les nouvelles entreprises"
+          onPress={() => router.push("/(admin)/pending")}
+        />
+        <ActionRow
+          testID="nav-banner"
+          icon="image"
+          title="Bannière d'accueil"
+          subtitle="Importer une image affichée en tête du catalogue"
+          onPress={() => router.push("/(admin)/banner")}
+        />
+        <ActionRow
           testID="nav-export"
           icon="download"
           title="Exporter toutes les commandes"

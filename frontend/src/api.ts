@@ -64,6 +64,8 @@ export type User = {
   phone: string;
   delivery_address: string;
   role?: string;
+  account_type?: "business" | "personal";
+  status?: "pending" | "approved" | "rejected";
 };
 
 export type Product = {
@@ -113,6 +115,16 @@ export const api = {
     method: "POST",
     body: JSON.stringify(body),
   }),
+  registerPersonal: (body: {
+    full_name: string;
+    email: string;
+    phone: string;
+    delivery_address: string;
+    password: string;
+  }) => request<{ access_token: string; user: User }>("/auth/register-personal", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
   login: (email: string, password: string) =>
     request<{ access_token: string; user: User }>("/auth/login", {
       method: "POST",
@@ -147,4 +159,16 @@ export const api = {
   customerInvoice: (id: string) => `/orders/${id}/invoice-pdf`,
   adminExportAll: () =>
     request<{ filename: string; content: string; count: number }>("/admin/orders/export"),
+  adminPending: () => request<User[]>("/admin/pending"),
+  adminApprove: (id: string) =>
+    request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
+  adminReject: (id: string) =>
+    request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
+  getBanner: () => request<{ image_url: string | null }>("/banner"),
+  setBanner: (image_url: string) =>
+    request<{ image_url: string }>("/admin/banner", {
+      method: "PUT",
+      body: JSON.stringify({ image_url }),
+    }),
+  deleteBanner: () => request<void>("/admin/banner", { method: "DELETE" }),
 };

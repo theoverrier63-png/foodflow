@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, CartItem } from "@/src/api";
+import { useAuth } from "@/src/auth-context";
 import { useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, unitShort } from "@/src/units";
@@ -26,12 +27,17 @@ export default function Cart() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { items, inc, dec, remove, setQty, total, clear } = useCart();
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const router = useRouter();
 
   async function submit() {
     if (!items.length) return;
+    if (user?.status === "pending") {
+      toast.show("Compte en attente de validation par Leray-Pointel", "error");
+      return;
+    }
     try {
       setBusy(true);
       await api.createOrder(items);

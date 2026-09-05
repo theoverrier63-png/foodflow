@@ -37,13 +37,19 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
 
   async function load() {
     try {
       setError(null);
-      const [cs, ps] = await Promise.all([api.categories(), api.products()]);
+      const [cs, ps, bn] = await Promise.all([
+        api.categories(),
+        api.products(),
+        api.getBanner().catch(() => ({ image_url: null })),
+      ]);
       setCats(cs.categories);
       setProducts(ps);
+      setBanner(bn.image_url);
     } catch (e: any) {
       setError(e?.message || "Erreur");
     } finally {
@@ -163,10 +169,25 @@ export default function Catalog() {
               tintColor={colors.brandPrimary}
             />
           }
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Feather name="inbox" size={40} color={colors.muted} />
-              <Text style={styles.emptyTxt}>Aucun produit trouvé</Text>
+          ListHeaderComponent={
+            <View>
+              {banner ? (
+                <Image
+                  source={{ uri: banner }}
+                  style={styles.bannerImg}
+                  contentFit="cover"
+                  transition={200}
+                />
+              ) : null}
+              {user?.status === "pending" ? (
+                <View style={styles.pendingCard} testID="pending-status-banner">
+                  <Feather name="clock" size={16} color={colors.onWarning} />
+                  <Text style={styles.pendingTxt}>
+                    Compte en attente de validation par Leray-Pointel. Vous ne pouvez pas
+                    encore passer de commande.
+                  </Text>
+                </View>
+              ) : null}
             </View>
           }
           renderItem={({ item }) => (
@@ -338,6 +359,23 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.border,
     gap: 10,
   },
+  bannerImg: {
+    width: "100%",
+    height: 140,
+    borderRadius: 14,
+    marginBottom: 12,
+    backgroundColor: colors.surfaceTertiary,
+  },
+  pendingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.warning,
+    marginBottom: 12,
+  },
+  pendingTxt: { color: colors.onWarning, fontSize: 12, fontWeight: "600", flex: 1 },
   cardTapArea: {
     flexDirection: "row",
     alignItems: "center",

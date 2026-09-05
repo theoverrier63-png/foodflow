@@ -23,7 +23,7 @@ const HERO =
   "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMHdob2xlc2FsZSUyMHZlZ2V0YWJsZXMlMjBjcmF0ZXxlbnwwfHx8fDE3ODg1NDgxNzN8MA&ixlib=rb-4.1.0&q=85";
 
 export default function Login() {
-  const [mode, setMode] = useState<"company" | "supplier">("company");
+  const [mode, setMode] = useState<"company" | "personal" | "supplier">("company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,6 +50,7 @@ export default function Login() {
   }
 
   const isSupplier = mode === "supplier";
+  const isPersonal = mode === "personal";
 
   return (
     <KeyboardAvoidingView
@@ -85,20 +86,39 @@ export default function Login() {
             <Pressable
               testID="tab-company"
               onPress={() => setMode("company")}
-              style={[styles.tab, !isSupplier && styles.tabActive]}
+              style={[styles.tab, mode === "company" && styles.tabActive]}
             >
               <Feather
                 name="briefcase"
-                size={14}
-                color={!isSupplier ? colors.onBrandPrimary : colors.muted}
+                size={13}
+                color={mode === "company" ? colors.onBrandPrimary : colors.muted}
               />
               <Text
                 style={[
                   styles.tabTxt,
-                  { color: !isSupplier ? colors.onBrandPrimary : colors.muted },
+                  { color: mode === "company" ? colors.onBrandPrimary : colors.muted },
                 ]}
               >
                 Entreprise
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="tab-personal"
+              onPress={() => setMode("personal")}
+              style={[styles.tab, isPersonal && styles.tabActive]}
+            >
+              <Feather
+                name="user"
+                size={13}
+                color={isPersonal ? colors.onBrandPrimary : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.tabTxt,
+                  { color: isPersonal ? colors.onBrandPrimary : colors.muted },
+                ]}
+              >
+                Particulier
               </Text>
             </Pressable>
             <Pressable
@@ -108,7 +128,7 @@ export default function Login() {
             >
               <Feather
                 name="truck"
-                size={14}
+                size={13}
                 color={isSupplier ? colors.onBrandPrimary : colors.muted}
               />
               <Text
@@ -123,11 +143,17 @@ export default function Login() {
           </View>
 
           <Text style={styles.title}>
-            {isSupplier ? "Espace fournisseur" : "Connexion"}
+            {isSupplier
+              ? "Espace fournisseur"
+              : isPersonal
+              ? "Connexion particulier"
+              : "Connexion"}
           </Text>
           <Text style={styles.subtitle}>
             {isSupplier
               ? "Réservé à Leray-Pointel — gestion du catalogue et des commandes."
+              : isPersonal
+              ? "Connectez-vous à votre compte particulier"
               : "Connectez-vous à votre compte entreprise"}
           </Text>
 
@@ -203,9 +229,14 @@ export default function Login() {
           ) : (
             <View style={styles.footer}>
               <Text style={styles.footerTxt}>Pas encore de compte ?</Text>
-              <Link href="/(auth)/register" asChild>
+              <Link
+                href={isPersonal ? "/(auth)/register-personal" : "/(auth)/register"}
+                asChild
+              >
                 <Pressable testID="go-to-register-button">
-                  <Text style={styles.footerLink}>Créer un compte</Text>
+                  <Text style={styles.footerLink}>
+                    {isPersonal ? "Créer un compte particulier" : "Créer un compte"}
+                  </Text>
                 </Pressable>
               </Link>
             </View>
@@ -256,14 +287,15 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 8,
   },
   tabActive: {
     backgroundColor: colors.brandPrimary,
   },
-  tabTxt: { fontSize: 13, fontWeight: "700" },
+  tabTxt: { fontSize: 12, fontWeight: "700" },
   supplierNotice: {
     flexDirection: "row",
     alignItems: "center",

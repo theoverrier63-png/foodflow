@@ -65,6 +65,19 @@ class RegisterIn(BaseModel):
         return str(v).strip().lower()
 
 
+class RegisterPersonalIn(BaseModel):
+    full_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    phone: str = Field(min_length=6, max_length=30)
+    delivery_address: str = Field(min_length=5, max_length=500)
+    password: str = Field(min_length=6, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def norm_email(cls, v):
+        return str(v).strip().lower()
+
+
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
@@ -83,6 +96,8 @@ class UserOut(BaseModel):
     phone: str
     delivery_address: str
     role: str = "user"
+    account_type: str = "business"  # "business" or "personal"
+    status: str = "approved"  # "pending" | "approved" | "rejected"
 
 
 class TokenOut(BaseModel):
@@ -154,11 +169,13 @@ def user_public(doc: dict) -> dict:
     return {
         "id": doc["id"],
         "company_name": doc["company_name"],
-        "siret": doc["siret"],
+        "siret": doc.get("siret", ""),
         "email": doc["email"],
         "phone": doc["phone"],
         "delivery_address": doc["delivery_address"],
         "role": doc.get("role", "user"),
+        "account_type": doc.get("account_type", "business"),
+        "status": doc.get("status", "approved"),
     }
 
 
@@ -239,11 +256,31 @@ SEED_PRODUCTS = [
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
-    await db.users.create_index("siret", unique=True)
+    # Drop the legacy unique index on siret so personal users can have empty siret
+    try:
+        await db.users.drop_index("siret_1")
+    except Exception:
+        pass
+    # Recreate as unique only when siret is a non-empty regex match
+    await db.users.create_index(
+        "siret",
+        unique=True,
+        partialFilterExpression={"siret": {"$gt": ""}},
+    )
     await db.users.create_index("id", unique=True)
     await db.products.create_index("id", unique=True)
     await db.orders.create_index("id", unique=True)
     await db.orders.create_index("user_id")
+
+    # Migrate existing users to have account_type + status
+    await db.users.update_many(
+        {"role": {"$ne": "admin"}, "account_type": {"$exists": False}},
+        {"$set": {"account_type": "business", "status": "approved"}},
+    )
+    await db.users.update_many(
+        {"role": "admin", "account_type": {"$exists": False}},
+        {"$set": {"account_type": "business", "status": "approved"}},
+    )
 
     # Seed products — re-seed if the DB is empty OR if products are missing
     # the new sell_unit field (backward-compatible migration).
@@ -322,12 +359,38 @@ async def register(body: RegisterIn):
         "phone": body.phone.strip(),
         "delivery_address": body.delivery_address.strip(),
         "password_hash": hash_password(body.password),
+        "role": "user",
+        "account_type": "business",
+        "status": "pending",  # awaits supplier approval
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
         await db.users.insert_one(doc)
     except DuplicateKeyError:
         raise HTTPException(409, "Email ou SIRET déjà enregistré")
+    return {"access_token": make_token(user_id), "token_type": "bearer", "user": user_public(doc)}
+
+
+@api.post("/auth/register-personal", response_model=TokenOut, status_code=201)
+async def register_personal(body: RegisterPersonalIn):
+    user_id = str(uuid.uuid4())
+    doc = {
+        "id": user_id,
+        "company_name": body.full_name.strip(),
+        "siret": "",
+        "email": body.email,
+        "phone": body.phone.strip(),
+        "delivery_address": body.delivery_address.strip(),
+        "password_hash": hash_password(body.password),
+        "role": "user",
+        "account_type": "personal",
+        "status": "approved",  # no approval needed for personal buyers
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await db.users.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(409, "Email déjà enregistré")
     return {"access_token": make_token(user_id), "token_type": "bearer", "user": user_public(doc)}
 
 
@@ -369,6 +432,8 @@ async def get_product(product_id: str):
 
 @api.post("/orders", response_model=Order, status_code=201)
 async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
+    if user.get("status", "approved") != "approved":
+        raise HTTPException(403, "Votre compte est en attente de validation par Leray-Pointel")
     if not body.items:
         raise HTTPException(400, "Panier vide")
     total = round(sum(i.price * i.quantity for i in body.items), 2)
@@ -709,6 +774,70 @@ async def admin_export_all(_: dict = Depends(require_admin)):
             _csv_escape(f"{o['total']:.2f}"),
         ]))
     return {"filename": "commandes-export.csv", "content": "\n".join(lines), "count": len(docs)}
+
+
+# ---- Pending business accounts ----
+
+@api.get("/admin/pending", response_model=List[UserOut])
+async def admin_list_pending(_: dict = Depends(require_admin)):
+    docs = await db.users.find(
+        {"account_type": "business", "status": "pending"}, {"_id": 0, "password_hash": 0}
+    ).sort("created_at", -1).to_list(500)
+    return [user_public(d) for d in docs]
+
+
+@api.post("/admin/pending/{user_id}/approve", response_model=UserOut)
+async def admin_approve(user_id: str, _: dict = Depends(require_admin)):
+    doc = await db.users.find_one_and_update(
+        {"id": user_id, "account_type": "business"},
+        {"$set": {"status": "approved"}},
+        projection={"_id": 0},
+        return_document=True,
+    )
+    if not doc:
+        raise HTTPException(404, "Compte introuvable")
+    return user_public(doc)
+
+
+@api.post("/admin/pending/{user_id}/reject", response_model=UserOut)
+async def admin_reject(user_id: str, _: dict = Depends(require_admin)):
+    doc = await db.users.find_one_and_update(
+        {"id": user_id, "account_type": "business"},
+        {"$set": {"status": "rejected"}},
+        projection={"_id": 0},
+        return_document=True,
+    )
+    if not doc:
+        raise HTTPException(404, "Compte introuvable")
+    return user_public(doc)
+
+
+# ---- Banner ----
+
+class BannerIn(BaseModel):
+    image_url: str = Field(min_length=1, max_length=5_000_000)
+
+
+@api.get("/banner")
+async def get_banner():
+    doc = await db.settings.find_one({"key": "banner"}, {"_id": 0})
+    return {"image_url": doc.get("image_url") if doc else None}
+
+
+@api.put("/admin/banner")
+async def set_banner(body: BannerIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "banner"},
+        {"$set": {"key": "banner", "image_url": body.image_url}},
+        upsert=True,
+    )
+    return {"image_url": body.image_url}
+
+
+@api.delete("/admin/banner", status_code=204)
+async def delete_banner(_: dict = Depends(require_admin)):
+    await db.settings.delete_one({"key": "banner"})
+    return None
 
 
 app.include_router(api)

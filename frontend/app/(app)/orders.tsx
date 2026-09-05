@@ -165,18 +165,8 @@ export default function Orders() {
                 )}
                 <View style={styles.divider} />
                 <View style={styles.totalRow}>
-                  <View>
-                    <Text style={styles.totalLabel}>Total HT</Text>
-                    <Text style={styles.totalVal}>{item.total.toFixed(2)} €</Text>
-                  </View>
-                  <Pressable
-                    testID={`invoice-${item.id}`}
-                    onPress={() => downloadInvoice(item)}
-                    style={styles.invoiceBtn}
-                  >
-                    <Feather name="download" size={14} color={colors.brandPrimary} />
-                    <Text style={styles.invoiceTxt}>Facture PDF</Text>
-                  </Pressable>
+                  <Text style={styles.totalLabel}>Total HT</Text>
+                  <Text style={styles.totalVal}>{item.total.toFixed(2)} €</Text>
                 </View>
               </View>
             );

@@ -13,6 +13,13 @@ type AuthCtx = {
     delivery_address: string;
     password: string;
   }) => Promise<void>;
+  signUpPersonal: (body: {
+    full_name: string;
+    email: string;
+    phone: string;
+    delivery_address: string;
+    password: string;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -49,13 +56,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
+  const signUpPersonal = useCallback(
+    async (body: Parameters<AuthCtx["signUpPersonal"]>[0]) => {
+      const res = await api.registerPersonal(body);
+      await saveToken(res.access_token);
+      setUser(res.user);
+    },
+    []
+  );
+
   const signOut = useCallback(async () => {
     await clearToken();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signUpPersonal, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -16,6 +16,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
 import { useToast } from "@/src/toast";
+import { pickImageAsDataUrl } from "@/src/image-picker";
 import { makeStyles, useTheme } from "@/src/theme";
 
 type Form = {
@@ -262,11 +263,27 @@ export default function ProductEdit() {
           </View>
         </View>
 
+        <Pressable
+          testID="pick-image-btn"
+          onPress={async () => {
+            try {
+              const data = await pickImageAsDataUrl();
+              if (data) set("image_url", data);
+            } catch (e: any) {
+              toast.show(e?.message || "Erreur", "error");
+            }
+          }}
+          style={({ pressed }) => [styles.photoPicker, pressed && { opacity: 0.85 }]}
+        >
+          <Feather name="camera" size={16} color={colors.brandPrimary} />
+          <Text style={styles.photoPickerTxt}>Choisir une photo depuis la galerie</Text>
+        </Pressable>
+
         <View style={styles.field}>
-          <Text style={styles.label}>URL de l'image</Text>
+          <Text style={styles.label}>URL de l'image (optionnel)</Text>
           <TextInput
             testID="edit-image"
-            value={form.image_url}
+            value={form.image_url.startsWith("data:") ? "" : form.image_url}
             onChangeText={(v) => set("image_url", v)}
             autoCapitalize="none"
             placeholder="https://…"
@@ -361,6 +378,18 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: 999,
     borderWidth: 1,
   },
+  photoPicker: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.brandSecondary,
+  },
+  photoPickerTxt: { fontSize: 13, fontWeight: "700", color: colors.brandPrimary },
   stickyCta: {
     position: "absolute",
     left: 0,
