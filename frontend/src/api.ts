@@ -119,6 +119,7 @@ export const api = {
   me: () => request<User>("/auth/me"),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
+  getProduct: (id: string) => request<Product>(`/products/${id}`),
   categories: () => request<{ categories: string[] }>("/products/categories"),
   createOrder: (items: CartItem[], notes = "") =>
     request<Order>("/orders", {

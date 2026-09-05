@@ -64,6 +64,7 @@ export default function AppTabsLayout() {
           tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="product-detail" options={{ href: null }} />
     </Tabs>
   );
 }

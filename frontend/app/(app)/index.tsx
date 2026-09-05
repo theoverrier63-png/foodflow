@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
@@ -27,6 +28,7 @@ export default function Catalog() {
   const { user } = useAuth();
   const { add } = useCart();
   const toast = useToast();
+  const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cats, setCats] = useState<string[]>(["Tous"]);
@@ -170,6 +172,12 @@ export default function Catalog() {
           renderItem={({ item }) => (
             <ProductRow
               product={item}
+              onOpen={() =>
+                router.push({
+                  pathname: "/(app)/product-detail",
+                  params: { id: item.id },
+                })
+              }
               onAdd={(q) => {
                 add(item, q);
                 toast.show(
@@ -188,9 +196,11 @@ export default function Catalog() {
 function ProductRow({
   product,
   onAdd,
+  onOpen,
 }: {
   product: Product;
   onAdd: (quantity: number) => void;
+  onOpen: () => void;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -205,51 +215,58 @@ function ProductRow({
 
   return (
     <View style={styles.card} testID={`product-card-${product.id}`}>
-      <Image
-        source={{ uri: product.image_url }}
-        style={styles.cardImg}
-        contentFit="cover"
-        transition={200}
-      />
-      <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {product.name}
-        </Text>
-        <View style={styles.cardMetaRow}>
-          <Feather name="map-pin" size={11} color={colors.muted} />
-          <Text style={styles.cardMeta}>{product.origin}</Text>
-          <View style={styles.dot} />
-          <Text style={styles.cardMeta}>{product.unit}</Text>
-        </View>
-        <Text style={styles.cardPrice}>
-          {product.price.toFixed(2)} € HT
-          <Text style={styles.cardPriceUnit}> / {unitLabel(product.sell_unit)}</Text>
-        </Text>
-
-        <View style={styles.qtyRow}>
-          <View style={styles.qtyInputWrap}>
-            <TextInput
-              testID={`qty-${product.id}`}
-              value={qtyStr}
-              onChangeText={setQtyStr}
-              keyboardType={product.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
-              selectTextOnFocus
-              style={styles.qtyInput}
-              onSubmitEditing={submit}
-              returnKeyType="done"
-            />
-            <Text style={styles.qtyUnit}>{unitShort(product.sell_unit)}</Text>
+      <Pressable
+        testID={`open-${product.id}`}
+        onPress={onOpen}
+        style={({ pressed }) => [styles.cardTapArea, pressed && { opacity: 0.85 }]}
+      >
+        <Image
+          source={{ uri: product.image_url }}
+          style={styles.cardImg}
+          contentFit="cover"
+          transition={200}
+        />
+        <View style={styles.cardBody}>
+          <Text style={styles.cardName} numberOfLines={1}>
+            {product.name}
+          </Text>
+          <View style={styles.cardMetaRow}>
+            <Feather name="map-pin" size={11} color={colors.muted} />
+            <Text style={styles.cardMeta}>{product.origin}</Text>
+            <View style={styles.dot} />
+            <Text style={styles.cardMeta}>{product.unit}</Text>
           </View>
-          <Pressable
-            testID={`add-${product.id}`}
-            onPress={submit}
-            hitSlop={8}
-            style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Feather name="plus" size={16} color={colors.onBrandPrimary} />
-            <Text style={styles.addBtnTxt}>Ajouter</Text>
-          </Pressable>
+          <Text style={styles.cardPrice}>
+            {product.price.toFixed(2)} € HT
+            <Text style={styles.cardPriceUnit}> / {unitLabel(product.sell_unit)}</Text>
+          </Text>
         </View>
+        <Feather name="chevron-right" size={18} color={colors.muted} />
+      </Pressable>
+
+      <View style={styles.qtyRow}>
+        <View style={styles.qtyInputWrap}>
+          <TextInput
+            testID={`qty-${product.id}`}
+            value={qtyStr}
+            onChangeText={setQtyStr}
+            keyboardType={product.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
+            selectTextOnFocus
+            style={styles.qtyInput}
+            onSubmitEditing={submit}
+            returnKeyType="done"
+          />
+          <Text style={styles.qtyUnit}>{unitShort(product.sell_unit)}</Text>
+        </View>
+        <Pressable
+          testID={`add-${product.id}`}
+          onPress={submit}
+          hitSlop={8}
+          style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}
+        >
+          <Feather name="plus" size={16} color={colors.onBrandPrimary} />
+          <Text style={styles.addBtnTxt}>Ajouter</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -314,13 +331,16 @@ const useStyles = makeStyles((colors) => ({
   emptyWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 8 },
   emptyTxt: { color: colors.muted, fontSize: 14 },
   card: {
-    flexDirection: "row",
-    alignItems: "flex-start",
     backgroundColor: colors.surfaceSecondary,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: 10,
+  },
+  cardTapArea: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   cardImg: { width: 68, height: 68, borderRadius: 12, backgroundColor: colors.surfaceTertiary },

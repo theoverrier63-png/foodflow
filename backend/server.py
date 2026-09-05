@@ -347,6 +347,14 @@ async def categories():
     return {"categories": ["Tous"] + sorted(cats)}
 
 
+@api.get("/products/{product_id}", response_model=Product)
+async def get_product(product_id: str):
+    doc = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Produit introuvable")
+    return doc
+
+
 @api.post("/orders", response_model=Order, status_code=201)
 async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
     if not body.items:
