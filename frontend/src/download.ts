@@ -1,5 +1,5 @@
 import { Platform, Share } from "react-native";
-import * as FileSystem from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { getToken } from "./api";
 
@@ -29,7 +29,8 @@ export async function downloadCsv(filename: string, content: string) {
 
 // Download an authenticated file (PDF, etc.) from the API.
 // Web  → forces a browser download of the blob.
-// Native → saves to app cache and opens the share sheet.
+// Native → uses the modern expo-file-system File API to save to app cache,
+// then opens the native share sheet.
 export async function downloadAuthedFile(
   path: string,
   filename: string,
@@ -55,22 +56,21 @@ export async function downloadAuthedFile(
     return;
   }
 
-  // Native — write to cache then share
-  // @ts-ignore expo-file-system exports both legacy (top-level) and new APIs
-  const cacheDir: string = (FileSystem as any).cacheDirectory ?? "";
-  const dest = cacheDir + filename;
-  const download = await (FileSystem as any).downloadAsync(url, dest, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  // Native — download into the app cache with the modern API
+  const target = new File(Paths.cache, filename);
+  if (target.exists) target.delete();
+  const downloaded = await File.downloadFileAsync(url, target, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
-  if (!download?.uri) throw new Error("Téléchargement impossible");
+  const localUri = downloaded?.uri ?? target.uri;
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(download.uri, {
+    await Sharing.shareAsync(localUri, {
       mimeType,
       dialogTitle: filename,
       UTI: mimeType === "application/pdf" ? "com.adobe.pdf" : undefined,
     });
   } else {
-    await Share.share({ title: filename, message: download.uri });
+    await Share.share({ title: filename, message: localUri });
   }
 }
