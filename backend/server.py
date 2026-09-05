@@ -97,6 +97,7 @@ class Product(BaseModel):
     category: str
     origin: str
     unit: str
+    sell_unit: str = "piece"  # "kg" or "piece"
     price: float
     image_url: str
     description: str
@@ -106,8 +107,9 @@ class CartItem(BaseModel):
     product_id: str
     name: str
     unit: str
+    sell_unit: str = "piece"
     price: float
-    quantity: int
+    quantity: float
 
 
 class OrderCreate(BaseModel):
@@ -181,52 +183,52 @@ async def require_admin(user: dict = Depends(current_user)):
 # ============================== SEED PRODUCTS ==============================
 
 SEED_PRODUCTS = [
-    # Fruits
-    {"name": "Pommes Gala", "category": "Fruits", "origin": "France", "unit": "Cagette 5kg", "price": 12.90,
+    # Fruits — vendus au kg
+    {"name": "Pommes Gala", "category": "Fruits", "origin": "France", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.58,
      "image_url": "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
      "description": "Pommes Gala croquantes et sucrées, catégorie Extra."},
-    {"name": "Bananes", "category": "Fruits", "origin": "Équateur", "unit": "Carton 18kg", "price": 24.50,
+    {"name": "Bananes", "category": "Fruits", "origin": "Équateur", "unit": "Carton 18kg", "sell_unit": "kg", "price": 1.36,
      "image_url": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600",
      "description": "Bananes Cavendish mûrissage contrôlé."},
-    {"name": "Oranges à jus", "category": "Fruits", "origin": "Espagne", "unit": "Sac 10kg", "price": 15.00,
+    {"name": "Oranges à jus", "category": "Fruits", "origin": "Espagne", "unit": "Sac 10kg", "sell_unit": "kg", "price": 1.50,
      "image_url": "https://images.unsplash.com/photo-1580052614034-c55d20bfee3b?w=600",
      "description": "Oranges juteuses idéales pour presser."},
-    {"name": "Fraises Gariguette", "category": "Fruits", "origin": "France", "unit": "Barquette 500g x8", "price": 32.00,
+    {"name": "Fraises Gariguette", "category": "Fruits", "origin": "France", "unit": "Barquette 500g", "sell_unit": "kg", "price": 8.00,
      "image_url": "https://images.unsplash.com/photo-1543528176-61b239494933?w=600",
      "description": "Fraises Gariguette parfumées, saison de printemps."},
-    {"name": "Citrons jaunes", "category": "Fruits", "origin": "Italie", "unit": "Cagette 5kg", "price": 14.20,
+    {"name": "Citrons jaunes", "category": "Fruits", "origin": "Italie", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.84,
      "image_url": "https://images.unsplash.com/photo-1587496679742-bad5f8034b8f?w=600",
      "description": "Citrons de Sicile calibre moyen."},
-    # Légumes
-    {"name": "Tomates grappe", "category": "Légumes", "origin": "France", "unit": "Cagette 6kg", "price": 18.90,
+    # Légumes — au kg sauf salade (pièce)
+    {"name": "Tomates grappe", "category": "Légumes", "origin": "France", "unit": "Cagette 6kg", "sell_unit": "kg", "price": 3.15,
      "image_url": "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600",
      "description": "Tomates grappe rouges, mûres à point."},
-    {"name": "Pommes de terre Charlotte", "category": "Légumes", "origin": "France", "unit": "Sac 25kg", "price": 22.50,
+    {"name": "Pommes de terre Charlotte", "category": "Légumes", "origin": "France", "unit": "Sac 25kg", "sell_unit": "kg", "price": 0.90,
      "image_url": "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600",
      "description": "Charlotte à chair ferme, idéale pour vapeur et poêlée."},
-    {"name": "Carottes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "price": 11.00,
+    {"name": "Carottes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "price": 1.10,
      "image_url": "https://images.unsplash.com/photo-1445282768818-728615cc910a?w=600",
      "description": "Carottes lavées calibre 200/300g."},
-    {"name": "Courgettes", "category": "Légumes", "origin": "Maroc", "unit": "Cagette 5kg", "price": 13.80,
+    {"name": "Courgettes", "category": "Légumes", "origin": "Maroc", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.76,
      "image_url": "https://images.unsplash.com/photo-1596566267081-c7cbe07850f6?w=600",
      "description": "Courgettes vertes fermes, calibre régulier."},
-    {"name": "Poivrons rouges", "category": "Légumes", "origin": "Espagne", "unit": "Cagette 5kg", "price": 16.50,
+    {"name": "Poivrons rouges", "category": "Légumes", "origin": "Espagne", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 3.30,
      "image_url": "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=600",
      "description": "Poivrons rouges charnus."},
-    {"name": "Salade batavia", "category": "Légumes", "origin": "France", "unit": "Colis 12 pièces", "price": 14.40,
+    {"name": "Salade batavia", "category": "Légumes", "origin": "France", "unit": "Pièce", "sell_unit": "piece", "price": 1.20,
      "image_url": "https://images.unsplash.com/photo-1622206151246-c47eb45f0263?w=600",
      "description": "Batavia française, croquante."},
-    {"name": "Oignons jaunes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "price": 9.80,
+    {"name": "Oignons jaunes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "price": 0.98,
      "image_url": "https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=600",
      "description": "Oignons jaunes à cuire."},
-    # Herbes
-    {"name": "Basilic frais", "category": "Herbes", "origin": "France", "unit": "Colis 12 bottes", "price": 18.00,
+    # Herbes — à la pièce (botte)
+    {"name": "Basilic frais", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.50,
      "image_url": "https://images.unsplash.com/photo-1618375569909-3c8616cf7733?w=600",
      "description": "Basilic frais parfumé, coupé du jour."},
-    {"name": "Persil plat", "category": "Herbes", "origin": "France", "unit": "Colis 12 bottes", "price": 12.00,
+    {"name": "Persil plat", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.00,
      "image_url": "https://images.unsplash.com/photo-1600231915711-cbc80c8d6a2b?w=600",
      "description": "Persil plat frais, aromatique."},
-    {"name": "Coriandre fraîche", "category": "Herbes", "origin": "France", "unit": "Colis 12 bottes", "price": 13.50,
+    {"name": "Coriandre fraîche", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.13,
      "image_url": "https://images.unsplash.com/photo-1611089547453-af23c98f1503?w=600",
      "description": "Coriandre fraîche pour cuisine du monde."},
 ]
@@ -241,14 +243,15 @@ async def startup():
     await db.orders.create_index("id", unique=True)
     await db.orders.create_index("user_id")
 
-    # Seed products only if empty
-    count = await db.products.count_documents({})
-    if count == 0:
-        docs = []
-        for p in SEED_PRODUCTS:
-            docs.append({"id": str(uuid.uuid4()), **p})
+    # Seed products — re-seed if the DB is empty OR if products are missing
+    # the new sell_unit field (backward-compatible migration).
+    total = await db.products.count_documents({})
+    legacy = await db.products.count_documents({"sell_unit": {"$exists": False}})
+    if total == 0 or legacy > 0:
+        await db.products.delete_many({})
+        docs = [{"id": str(uuid.uuid4()), **p} for p in SEED_PRODUCTS]
         await db.products.insert_many(docs)
-        logger.info(f"Seeded {len(docs)} products")
+        logger.info(f"Seeded {len(docs)} products with sell_unit")
 
     # Seed default supplier (admin) account — only Leray-Pointel has admin access.
     admin_email = "sarl.leraypointel@orange.fr"
@@ -390,9 +393,17 @@ class ProductIn(BaseModel):
     category: str = Field(min_length=1, max_length=100)
     origin: str = Field(min_length=1, max_length=100)
     unit: str = Field(min_length=1, max_length=100)
+    sell_unit: str = Field(default="piece")
     price: float = Field(gt=0)
     image_url: str = Field(min_length=1, max_length=1000)
     description: str = Field(default="", max_length=1000)
+
+    @field_validator("sell_unit")
+    @classmethod
+    def check_sell_unit(cls, v):
+        if v not in ("kg", "piece"):
+            raise ValueError("sell_unit doit être 'kg' ou 'piece'")
+        return v
 
 
 class StatusUpdate(BaseModel):
@@ -560,16 +571,21 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     story.append(Spacer(1, 4 * mm))
 
     # ---------- Products table ----------
-    items_data = [["Produit", "Unité", "Qté", "PU HT (€)", "Total HT (€)"]]
+    items_data = [["Produit", "Format", "Qté", "PU HT (€)", "Total HT (€)"]]
     for it in order["items"]:
+        sell_unit = it.get("sell_unit", "piece")
+        unit_label = "kg" if sell_unit == "kg" else "pce"
+        # Format quantity: integer without trailing .0, else 2 decimals
+        q = it["quantity"]
+        q_str = f"{q:.2f}".rstrip("0").rstrip(".") if isinstance(q, float) else str(q)
         items_data.append([
             it["name"],
             it["unit"],
-            str(it["quantity"]),
-            f"{it['price']:.2f}",
-            f"{it['price'] * it['quantity']:.2f}",
+            f"{q_str} {unit_label}",
+            f"{it['price']:.2f}/{unit_label}",
+            f"{it['price'] * q:.2f}",
         ])
-    items_table = Table(items_data, colWidths=[65 * mm, 40 * mm, 15 * mm, 25 * mm, 25 * mm])
+    items_table = Table(items_data, colWidths=[55 * mm, 35 * mm, 25 * mm, 25 * mm, 30 * mm])
     items_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), brand),
         ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),

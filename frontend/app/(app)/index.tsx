@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { api, Product } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
+import { formatQty, parseQty, roundQty, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export default function Catalog() {
@@ -169,9 +170,12 @@ export default function Catalog() {
           renderItem={({ item }) => (
             <ProductRow
               product={item}
-              onAdd={() => {
-                add(item);
-                toast.show(`${item.name} ajouté au panier`, "success");
+              onAdd={(q) => {
+                add(item, q);
+                toast.show(
+                  `${item.name} ajouté (${formatQty(q)} ${unitShort(item.sell_unit)})`,
+                  "success"
+                );
               }}
             />
           )}
@@ -181,12 +185,32 @@ export default function Catalog() {
   );
 }
 
-function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void }) {
+function ProductRow({
+  product,
+  onAdd,
+}: {
+  product: Product;
+  onAdd: (quantity: number) => void;
+}) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const [qtyStr, setQtyStr] = React.useState(product.sell_unit === "kg" ? "1" : "1");
+
+  const submit = () => {
+    const q = roundQty(parseQty(qtyStr), product.sell_unit);
+    if (q <= 0) return;
+    onAdd(q);
+    setQtyStr(product.sell_unit === "kg" ? "1" : "1");
+  };
+
   return (
     <View style={styles.card} testID={`product-card-${product.id}`}>
-      <Image source={{ uri: product.image_url }} style={styles.cardImg} contentFit="cover" transition={200} />
+      <Image
+        source={{ uri: product.image_url }}
+        style={styles.cardImg}
+        contentFit="cover"
+        transition={200}
+      />
       <View style={styles.cardBody}>
         <Text style={styles.cardName} numberOfLines={1}>
           {product.name}
@@ -197,16 +221,36 @@ function ProductRow({ product, onAdd }: { product: Product; onAdd: () => void })
           <View style={styles.dot} />
           <Text style={styles.cardMeta}>{product.unit}</Text>
         </View>
-        <Text style={styles.cardPrice}>{product.price.toFixed(2)} € HT</Text>
+        <Text style={styles.cardPrice}>
+          {product.price.toFixed(2)} € HT
+          <Text style={styles.cardPriceUnit}> / {unitLabel(product.sell_unit)}</Text>
+        </Text>
+
+        <View style={styles.qtyRow}>
+          <View style={styles.qtyInputWrap}>
+            <TextInput
+              testID={`qty-${product.id}`}
+              value={qtyStr}
+              onChangeText={setQtyStr}
+              keyboardType={product.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
+              selectTextOnFocus
+              style={styles.qtyInput}
+              onSubmitEditing={submit}
+              returnKeyType="done"
+            />
+            <Text style={styles.qtyUnit}>{unitShort(product.sell_unit)}</Text>
+          </View>
+          <Pressable
+            testID={`add-${product.id}`}
+            onPress={submit}
+            hitSlop={8}
+            style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Feather name="plus" size={16} color={colors.onBrandPrimary} />
+            <Text style={styles.addBtnTxt}>Ajouter</Text>
+          </Pressable>
+        </View>
       </View>
-      <Pressable
-        testID={`add-${product.id}`}
-        onPress={onAdd}
-        hitSlop={12}
-        style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}
-      >
-        <Feather name="plus" size={22} color={colors.onBrandPrimary} />
-      </Pressable>
     </View>
   );
 }
@@ -271,7 +315,7 @@ const useStyles = makeStyles((colors) => ({
   emptyTxt: { color: colors.muted, fontSize: 14 },
   card: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: colors.surfaceSecondary,
     borderRadius: 16,
     padding: 12,
@@ -286,12 +330,50 @@ const useStyles = makeStyles((colors) => ({
   cardMeta: { fontSize: 12, color: colors.muted },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.muted },
   cardPrice: { fontSize: 15, fontWeight: "800", color: colors.brandPrimary, marginTop: 2 },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.brandPrimary,
+  cardPriceUnit: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  qtyRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  qtyInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    height: 36,
+    gap: 4,
+    minWidth: 72,
+  },
+  qtyInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.onSurface,
+    padding: 0,
+    minWidth: 30,
+  },
+  qtyUnit: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.muted,
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: colors.brandPrimary,
+  },
+  addBtnTxt: {
+    color: colors.onBrandPrimary,
+    fontSize: 13,
+    fontWeight: "700",
   },
 }));

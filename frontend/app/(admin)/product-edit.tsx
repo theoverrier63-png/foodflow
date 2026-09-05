@@ -25,6 +25,7 @@ const EMPTY: Form = {
   category: "Fruits",
   origin: "France",
   unit: "",
+  sell_unit: "kg",
   price: 0,
   image_url:
     "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600",
@@ -32,6 +33,10 @@ const EMPTY: Form = {
 };
 
 const CATEGORIES = ["Fruits", "Légumes", "Herbes"];
+const SELL_UNITS: Array<{ value: "kg" | "piece"; label: string }> = [
+  { value: "kg", label: "Au kilo" },
+  { value: "piece", label: "À la pièce" },
+];
 
 export default function ProductEdit() {
   const insets = useSafeAreaInsets();
@@ -192,20 +197,54 @@ export default function ProductEdit() {
           />
         </View>
 
+        <View style={styles.field}>
+          <Text style={styles.label}>Vendu au</Text>
+          <View style={styles.chipsRow}>
+            {SELL_UNITS.map((u) => {
+              const active = form.sell_unit === u.value;
+              return (
+                <Pressable
+                  key={u.value}
+                  testID={`sell-unit-${u.value}`}
+                  onPress={() => set("sell_unit", u.value)}
+                  style={[
+                    styles.chip,
+                    active
+                      ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                      : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: active ? colors.onBrandPrimary : colors.onSurface,
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {u.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={styles.row}>
           <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>Unité</Text>
+            <Text style={styles.label}>Format (info)</Text>
             <TextInput
               testID="edit-unit"
               value={form.unit}
               onChangeText={(v) => set("unit", v)}
-              placeholder="Ex : Cagette 5kg"
+              placeholder={form.sell_unit === "kg" ? "Ex : Cagette 5kg" : "Ex : Botte"}
               placeholderTextColor={colors.muted}
               style={styles.input}
             />
           </View>
           <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>Prix HT (€)</Text>
+            <Text style={styles.label}>
+              Prix HT (€/{form.sell_unit === "kg" ? "kg" : "pce"})
+            </Text>
             <TextInput
               testID="edit-price"
               value={priceStr}

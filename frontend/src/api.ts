@@ -72,6 +72,7 @@ export type Product = {
   category: string;
   origin: string;
   unit: string;
+  sell_unit: "kg" | "piece";
   price: number;
   image_url: string;
   description: string;
@@ -81,6 +82,7 @@ export type CartItem = {
   product_id: string;
   name: string;
   unit: string;
+  sell_unit: "kg" | "piece";
   price: number;
   quantity: number;
 };

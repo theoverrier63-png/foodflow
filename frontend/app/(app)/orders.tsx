@@ -14,6 +14,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { api, Order } from "@/src/api";
 import { downloadAuthedFile } from "@/src/download";
 import { useToast } from "@/src/toast";
+import { formatQty, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
 function formatDate(iso: string) {
@@ -148,7 +149,9 @@ export default function Orders() {
                 <View style={styles.divider} />
                 {item.items.slice(0, 3).map((it) => (
                   <View key={it.product_id} style={styles.itemRow}>
-                    <Text style={styles.itemQty}>×{it.quantity}</Text>
+                    <Text style={styles.itemQty}>
+                      {formatQty(it.quantity)} {unitShort(it.sell_unit)}
+                    </Text>
                     <Text style={styles.itemName} numberOfLines={1}>
                       {it.name}
                     </Text>
@@ -222,7 +225,7 @@ const useStyles = makeStyles((colors) => ({
   chipTxt: { fontSize: 11, fontWeight: "700" },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: 4 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  itemQty: { width: 32, fontSize: 12, fontWeight: "700", color: colors.brandPrimary },
+  itemQty: { width: 60, fontSize: 12, fontWeight: "700", color: colors.brandPrimary },
   itemName: { flex: 1, fontSize: 13, color: colors.onSurface },
   itemPrice: { fontSize: 13, color: colors.onSurface, fontWeight: "600" },
   more: { fontSize: 12, color: colors.muted, fontStyle: "italic" },

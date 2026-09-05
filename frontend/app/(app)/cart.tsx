@@ -1,19 +1,21 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   Pressable,
   FlatList,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
-import { api } from "@/src/api";
+import { api, CartItem } from "@/src/api";
 import { useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
+import { formatQty, parseQty, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const EMPTY_IMG =
@@ -23,7 +25,7 @@ export default function Cart() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { items, inc, dec, remove, total, clear } = useCart();
+  const { items, inc, dec, remove, setQty, total, clear } = useCart();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const router = useRouter();
@@ -77,43 +79,13 @@ export default function Cart() {
               gap: 10,
             }}
             renderItem={({ item }) => (
-              <View style={styles.row} testID={`cart-row-${item.product_id}`}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.rowMeta}>
-                    {item.unit} • {item.price.toFixed(2)} €
-                  </Text>
-                </View>
-                <View style={styles.stepper}>
-                  <Pressable
-                    testID={`dec-${item.product_id}`}
-                    onPress={() => dec(item.product_id)}
-                    hitSlop={12}
-                    style={styles.stepBtn}
-                  >
-                    <Feather name="minus" size={16} color={colors.onSurface} />
-                  </Pressable>
-                  <Text style={styles.qty}>{item.quantity}</Text>
-                  <Pressable
-                    testID={`inc-${item.product_id}`}
-                    onPress={() => inc(item.product_id)}
-                    hitSlop={12}
-                    style={styles.stepBtn}
-                  >
-                    <Feather name="plus" size={16} color={colors.onSurface} />
-                  </Pressable>
-                </View>
-                <Pressable
-                  testID={`del-${item.product_id}`}
-                  onPress={() => remove(item.product_id)}
-                  hitSlop={12}
-                  style={styles.delBtn}
-                >
-                  <Feather name="trash-2" size={16} color={colors.error} />
-                </Pressable>
-              </View>
+              <CartRow
+                item={item}
+                onInc={() => inc(item.product_id)}
+                onDec={() => dec(item.product_id)}
+                onRemove={() => remove(item.product_id)}
+                onSet={(q) => setQty(item.product_id, q)}
+              />
             )}
           />
 
@@ -147,6 +119,97 @@ export default function Cart() {
   );
 }
 
+function CartRow({
+  item,
+  onInc,
+  onDec,
+  onRemove,
+  onSet,
+}: {
+  item: CartItem;
+  onInc: () => void;
+  onDec: () => void;
+  onRemove: () => void;
+  onSet: (q: number) => void;
+}) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const [editing, setEditing] = useState(formatQty(item.quantity));
+
+  // Keep the input aligned with the model when steppers change
+  React.useEffect(() => {
+    setEditing(formatQty(item.quantity));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.quantity]);
+
+  const commit = () => {
+    const q = parseQty(editing);
+    if (q > 0) onSet(q);
+    else setEditing(formatQty(item.quantity));
+  };
+
+  return (
+    <View style={styles.row} testID={`cart-row-${item.product_id}`}>
+      <View style={styles.rowInfo}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowName} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <Text style={styles.rowMeta} numberOfLines={1}>
+            {item.price.toFixed(2)} € / {unitShort(item.sell_unit)} • {item.unit}
+          </Text>
+        </View>
+        <Pressable
+          testID={`del-${item.product_id}`}
+          onPress={onRemove}
+          hitSlop={12}
+          style={styles.delBtn}
+        >
+          <Feather name="trash-2" size={16} color={colors.error} />
+        </Pressable>
+      </View>
+
+      <View style={styles.rowControls}>
+        <View style={styles.stepper}>
+          <Pressable
+            testID={`dec-${item.product_id}`}
+            onPress={onDec}
+            hitSlop={12}
+            style={styles.stepBtn}
+          >
+            <Feather name="minus" size={16} color={colors.onSurface} />
+          </Pressable>
+          <View style={styles.qtyEditWrap}>
+            <TextInput
+              testID={`qty-${item.product_id}`}
+              value={editing}
+              onChangeText={setEditing}
+              onBlur={commit}
+              onSubmitEditing={commit}
+              keyboardType={item.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
+              selectTextOnFocus
+              style={styles.qtyEditInput}
+              returnKeyType="done"
+            />
+            <Text style={styles.qtyEditUnit}>{unitShort(item.sell_unit)}</Text>
+          </View>
+          <Pressable
+            testID={`inc-${item.product_id}`}
+            onPress={onInc}
+            hitSlop={12}
+            style={styles.stepBtn}
+          >
+            <Feather name="plus" size={16} color={colors.onSurface} />
+          </Pressable>
+        </View>
+        <Text style={styles.rowLineTotal}>
+          {(item.price * item.quantity).toFixed(2)} €
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: {
@@ -171,17 +234,31 @@ const useStyles = makeStyles((colors) => ({
   },
   emptyCtaTxt: { color: colors.onBrandPrimary, fontWeight: "700" },
   row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceSecondary,
+    gap: 10,
+  },
+  rowInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  rowControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
   rowName: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   rowMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  rowLineTotal: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.brandPrimary,
+  },
   stepper: {
     flexDirection: "row",
     alignItems: "center",
@@ -192,17 +269,32 @@ const useStyles = makeStyles((colors) => ({
   },
   stepBtn: {
     width: 32,
-    height: 32,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.surfaceTertiary,
   },
-  qty: {
-    minWidth: 28,
+  qtyEditWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    height: 40,
+    minWidth: 60,
+    gap: 3,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  qtyEditInput: {
+    minWidth: 30,
     textAlign: "center",
     fontWeight: "700",
-    color: colors.onSurface,
     fontSize: 14,
+    color: colors.onSurface,
+    padding: 0,
+  },
+  qtyEditUnit: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.muted,
   },
   delBtn: {
     width: 32,

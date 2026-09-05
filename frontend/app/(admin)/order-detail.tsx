@@ -14,6 +14,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { api, Order } from "@/src/api";
 import { useToast } from "@/src/toast";
 import { downloadAuthedFile } from "@/src/download";
+import { formatQty, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
 function formatDate(iso: string) {
@@ -193,9 +194,9 @@ export default function AdminOrderDetail() {
             {/* Table header */}
             <View style={styles.tableHead}>
               <Text style={[styles.thTxt, { flex: 1 }]}>Produit</Text>
-              <Text style={[styles.thTxt, { width: 44, textAlign: "center" }]}>Qté</Text>
-              <Text style={[styles.thTxt, { width: 80, textAlign: "right" }]}>PU HT</Text>
-              <Text style={[styles.thTxt, { width: 80, textAlign: "right" }]}>Total</Text>
+              <Text style={[styles.thTxt, { width: 56, textAlign: "center" }]}>Qté</Text>
+              <Text style={[styles.thTxt, { width: 74, textAlign: "right" }]}>PU HT</Text>
+              <Text style={[styles.thTxt, { width: 74, textAlign: "right" }]}>Total</Text>
             </View>
             {order.items.map((it, idx) => (
               <View
@@ -215,9 +216,13 @@ export default function AdminOrderDetail() {
                   </Text>
                 </View>
                 <View style={styles.qtyPill}>
-                  <Text style={styles.qtyTxt}>×{it.quantity}</Text>
+                  <Text style={styles.qtyTxt}>
+                    {formatQty(it.quantity)} {unitShort(it.sell_unit)}
+                  </Text>
                 </View>
-                <Text style={styles.priceCell}>{it.price.toFixed(2)} €</Text>
+                <Text style={styles.priceCell}>
+                  {it.price.toFixed(2)}€/{unitShort(it.sell_unit)}
+                </Text>
                 <Text style={styles.lineTotal}>
                   {(it.price * it.quantity).toFixed(2)} €
                 </Text>
@@ -452,17 +457,17 @@ const useStyles = makeStyles((colors) => ({
   itemName: { fontSize: 14, fontWeight: "700", color: colors.onSurface },
   itemUnit: { fontSize: 11, color: colors.muted, marginTop: 2 },
   qtyPill: {
-    width: 44,
+    width: 56,
     height: 28,
     borderRadius: 8,
     backgroundColor: colors.brandSecondary,
     alignItems: "center",
     justifyContent: "center",
   },
-  qtyTxt: { fontSize: 12, fontWeight: "800", color: colors.brandPrimary },
-  priceCell: { width: 80, textAlign: "right", fontSize: 13, color: colors.onSurface },
+  qtyTxt: { fontSize: 11, fontWeight: "800", color: colors.brandPrimary },
+  priceCell: { width: 74, textAlign: "right", fontSize: 12, color: colors.onSurface },
   lineTotal: {
-    width: 80,
+    width: 74,
     textAlign: "right",
     fontSize: 14,
     fontWeight: "800",
