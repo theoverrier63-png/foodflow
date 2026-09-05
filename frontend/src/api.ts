@@ -74,6 +74,8 @@ export type Product = {
   unit: string;
   sell_unit: "kg" | "piece";
   price: number;
+  price_kg?: number | null;
+  price_piece?: number | null;
   image_url: string;
   description: string;
 };
@@ -130,9 +132,9 @@ export const api = {
 
   // ============ Admin ============
   adminStatuses: () => request<{ statuses: string[] }>("/admin/statuses"),
-  adminCreateProduct: (body: Omit<Product, "id">) =>
+  adminCreateProduct: (body: Omit<Product, "id" | "sell_unit" | "price">) =>
     request<Product>("/admin/products", { method: "POST", body: JSON.stringify(body) }),
-  adminUpdateProduct: (id: string, body: Omit<Product, "id">) =>
+  adminUpdateProduct: (id: string, body: Omit<Product, "id" | "sell_unit" | "price">) =>
     request<Product>(`/admin/products/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   adminDeleteProduct: (id: string) =>
     request<void>(`/admin/products/${id}`, { method: "DELETE" }),

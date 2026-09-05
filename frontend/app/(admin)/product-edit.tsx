@@ -18,25 +18,26 @@ import { api, Product } from "@/src/api";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
 
-type Form = Omit<Product, "id">;
+type Form = {
+  name: string;
+  category: string;
+  origin: string;
+  unit: string;
+  image_url: string;
+  description: string;
+};
 
 const EMPTY: Form = {
   name: "",
   category: "Fruits",
   origin: "France",
   unit: "",
-  sell_unit: "kg",
-  price: 0,
   image_url:
     "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600",
   description: "",
 };
 
 const CATEGORIES = ["Fruits", "Légumes", "Herbes"];
-const SELL_UNITS: Array<{ value: "kg" | "piece"; label: string }> = [
-  { value: "kg", label: "Au kilo" },
-  { value: "piece", label: "À la pièce" },
-];
 
 export default function ProductEdit() {
   const insets = useSafeAreaInsets();
@@ -48,7 +49,8 @@ export default function ProductEdit() {
   const editing = !!params.id;
 
   const [form, setForm] = useState<Form>(EMPTY);
-  const [priceStr, setPriceStr] = useState("0");
+  const [priceKgStr, setPriceKgStr] = useState("");
+  const [pricePieceStr, setPricePieceStr] = useState("");
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
 
@@ -63,9 +65,16 @@ export default function ProductEdit() {
           router.back();
           return;
         }
-        const { id: _id, ...rest } = p;
-        setForm(rest);
-        setPriceStr(String(rest.price));
+        setForm({
+          name: p.name,
+          category: p.category,
+          origin: p.origin,
+          unit: p.unit,
+          image_url: p.image_url,
+          description: p.description,
+        });
+        setPriceKgStr(p.price_kg != null ? String(p.price_kg) : "");
+        setPricePieceStr(p.price_piece != null ? String(p.price_piece) : "");
       } catch (e: any) {
         toast.show(e?.message || "Erreur", "error");
       } finally {
@@ -78,20 +87,31 @@ export default function ProductEdit() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  function parsePrice(v: string): number | null {
+    const n = parseFloat(v.replace(",", ".").trim());
+    return isFinite(n) && n > 0 ? n : null;
+  }
+
   async function submit() {
-    const price = parseFloat(priceStr.replace(",", "."));
+    const priceKg = parsePrice(priceKgStr);
+    const pricePiece = parsePrice(pricePieceStr);
     if (!form.name.trim()) return toast.show("Nom requis", "error");
-    if (!form.unit.trim()) return toast.show("Unité requise", "error");
-    if (!isFinite(price) || price <= 0) return toast.show("Prix invalide", "error");
+    if (!form.unit.trim()) return toast.show("Format requis", "error");
+    if (priceKg == null && pricePiece == null)
+      return toast.show("Saisissez au moins un prix (kg ou pièce)", "error");
     if (!form.image_url.trim()) return toast.show("Image requise", "error");
-    const payload: Form = { ...form, price };
+    const payload = {
+      ...form,
+      price_kg: priceKg ?? undefined,
+      price_piece: pricePiece ?? undefined,
+    };
     try {
       setSaving(true);
       if (editing && params.id) {
-        await api.adminUpdateProduct(params.id, payload);
+        await api.adminUpdateProduct(params.id, payload as any);
         toast.show("Produit mis à jour", "success");
       } else {
-        await api.adminCreateProduct(payload);
+        await api.adminCreateProduct(payload as any);
         toast.show("Produit créé", "success");
       }
       router.back();
@@ -198,62 +218,47 @@ export default function ProductEdit() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Vendu au</Text>
-          <View style={styles.chipsRow}>
-            {SELL_UNITS.map((u) => {
-              const active = form.sell_unit === u.value;
-              return (
-                <Pressable
-                  key={u.value}
-                  testID={`sell-unit-${u.value}`}
-                  onPress={() => set("sell_unit", u.value)}
-                  style={[
-                    styles.chip,
-                    active
-                      ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
-                      : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: active ? colors.onBrandPrimary : colors.onSurface,
-                      fontWeight: "600",
-                      fontSize: 13,
-                    }}
-                  >
-                    {u.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Text style={styles.label}>Format (info)</Text>
+          <TextInput
+            testID="edit-unit"
+            value={form.unit}
+            onChangeText={(v) => set("unit", v)}
+            placeholder="Ex : Cagette 5kg, Botte, Pièce…"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
         </View>
 
-        <View style={styles.row}>
-          <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>Format (info)</Text>
-            <TextInput
-              testID="edit-unit"
-              value={form.unit}
-              onChangeText={(v) => set("unit", v)}
-              placeholder={form.sell_unit === "kg" ? "Ex : Cagette 5kg" : "Ex : Botte"}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-          </View>
-          <View style={[styles.field, { flex: 1 }]}>
-            <Text style={styles.label}>
-              Prix HT (€/{form.sell_unit === "kg" ? "kg" : "pce"})
-            </Text>
-            <TextInput
-              testID="edit-price"
-              value={priceStr}
-              onChangeText={setPriceStr}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
+        <View style={styles.field}>
+          <Text style={styles.label}>Prix HT</Text>
+          <Text style={styles.hint}>
+            Renseignez au moins un prix. Laissez vide l'unité non applicable.
+          </Text>
+          <View style={styles.row}>
+            <View style={[styles.field, { flex: 1, gap: 4 }]}>
+              <Text style={styles.subLabel}>Au kilo (€/kg)</Text>
+              <TextInput
+                testID="edit-price-kg"
+                value={priceKgStr}
+                onChangeText={setPriceKgStr}
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+            <View style={[styles.field, { flex: 1, gap: 4 }]}>
+              <Text style={styles.subLabel}>À la pièce (€/pce)</Text>
+              <TextInput
+                testID="edit-price-piece"
+                value={pricePieceStr}
+                onChangeText={setPricePieceStr}
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
           </View>
         </View>
 
@@ -337,6 +342,8 @@ const useStyles = makeStyles((colors) => ({
   field: { gap: 6 },
   row: { flexDirection: "row", gap: 12 },
   label: { fontSize: 13, fontWeight: "600", color: colors.onSurface },
+  subLabel: { fontSize: 12, fontWeight: "500", color: colors.muted },
+  hint: { fontSize: 11, color: colors.muted, marginTop: -2 },
   input: {
     backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,

@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 4 — Dual-price (price_kg / price_piece) feature verified end-to-end. Backend: 8/8 pytest cases pass in /app/backend/tests/test_dual_price.py (POST/PUT with both prices default sell_unit=kg, POST/PUT without any price → 422, POST with only price_piece → sell_unit=piece + price_kg=null, POST with only price_kg → sell_unit=kg + price_piece=null, GET /products exposes both fields on all seeded products, Pommes Gala has price_kg=2.58 & price_piece=0.35). Frontend admin: /product-edit shows two side-by-side inputs (testID edit-price-kg / edit-price-piece), old 'Vendu au' sell_unit chip is gone, editing Pommes Gala prefills 2.58 and 0.35, saving returns to catalog with 'Produit mis à jour' toast. Frontend client: on Pommes Gala both 'Au kilo' and 'À la pièce' chips are active-selectable (each shows its own price 2.58 € / 0.35 €), tapping switches selection and updates the main price + CTA + subtotal (qty=3 → 3 × 0.35 = 1.05 €), no 'uniquement' toast when both prices exist, Ajouter au panier adds the correct line and shows 'Pommes Gala : 3 pce ajouté(s)' with cart badge = 1. For Basilic frais (piece-only): kg chip is greyed with '—', tapping it displays 'Ce produit est vendu à la pièce uniquement' toast and does not change the selection. RN deprecation noted (already reported in iter 3): props.pointerEvents on ToastProvider Animated.View.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: /app/frontend/src/toast.tsx:38 (pre-existing, non-blocking)"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_dual_price.py",
+    "/app/test_reports/pytest/dual_price_results.xml",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "action_items": [
+    "Optional: move pointerEvents='none' from the prop to the style object in ToastProvider (src/toast.tsx:38) to silence the RN deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "ProductIn.resolved() correctly enforces 'at least one price' with a 422 HTTPException and derives sell_unit deterministically (kg wins when both provided).",
+    "Startup migration in server.py populates price_kg/price_piece for legacy products from (price, sell_unit) — verified via GET /products (all 15 seeded products expose both fields with at least one non-null).",
+    "product-detail.tsx correctly wires selectedUnit off availableUnits(product) and priceFor(product, unit), so the main price / subtotal / CTA all reflect the selected unit live.",
+    "product-edit.tsx replaces the single Vendu au + price with two clean side-by-side inputs, correctly using undefined (not 0) when a price is empty so the backend receives null and passes the 422 rule."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_dual_price.py (new — 8 pytest cases covering dual-price CRUD)"
+  ],
+  "success_rate": {"backend": "100% (8/8 dual-price tests)", "frontend": "100% (admin edit + client product-detail flows for both dual-price and single-price products)"},
+  "seed_data_creation": "No new seed data. Used existing seeded products (Pommes Gala = dual price, Basilic frais = piece-only). Test-created products in dual-price tests are all cleaned up via DELETE at the end of each case.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Admin: sarl.leraypointel@orange.fr / Loic76930@ (tab-supplier). Client: test@leray.fr / Test1234! (default tab-company). Product-edit uses testIDs edit-price-kg, edit-price-piece, save-product-btn. To open a product's edit screen from the catalog, tap testID `edit-<product_id>` (the pencil icon; tapping the row name does NOT navigate). Product-detail chips have testIDs unit-kg / unit-piece. When both prices exist, both chips are ACTIVE-STYLE-SELECTABLE (tap toggles selection, no toast). When only one price exists, tapping the missing-price chip fires a French 'uniquement' info toast (testID 'toast').",
+  "rca_of_issue": "Not a bug fix — feature verification. Backend ProductIn.resolved() enforces the 'at least one price' rule and derives sell_unit; product-edit renders two independent numeric inputs; product-detail computes availableUnits(product) → chip.available; when both prices are set both chips are available (no greyed state), when one is missing the other chip is greyed with '—' and taps trigger a toast."
+}

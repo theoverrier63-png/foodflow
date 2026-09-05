@@ -1,12 +1,24 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { CartItem, Product } from "./api";
-import { roundQty, stepFor } from "./units";
+import { roundQty, stepFor, SellUnit } from "./units";
+
+export function priceFor(product: Product, unit: SellUnit): number | null {
+  if (unit === "kg") return product.price_kg ?? (product.sell_unit === "kg" ? product.price : null);
+  return product.price_piece ?? (product.sell_unit === "piece" ? product.price : null);
+}
+
+export function availableUnits(product: Product): SellUnit[] {
+  const units: SellUnit[] = [];
+  if (priceFor(product, "kg") != null) units.push("kg");
+  if (priceFor(product, "piece") != null) units.push("piece");
+  return units;
+}
 
 type CartCtx = {
   items: CartItem[];
   count: number;
   total: number;
-  add: (p: Product, quantity?: number) => void;
+  add: (p: Product, quantity?: number, unit?: SellUnit) => void;
   setQty: (productId: string, quantity: number) => void;
   inc: (productId: string) => void;
   dec: (productId: string) => void;
@@ -19,15 +31,21 @@ const CartContext = createContext<CartCtx | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const add = useCallback((p: Product, quantity = 1) => {
-    const q = roundQty(quantity, p.sell_unit);
+  const add = useCallback((p: Product, quantity = 1, unit?: SellUnit) => {
+    const chosenUnit: SellUnit = unit ?? p.sell_unit;
+    const price = priceFor(p, chosenUnit);
+    if (price == null) return;
+    const q = roundQty(quantity, chosenUnit);
     if (q <= 0) return;
+    // A cart line is unique per (product, unit) pair — merge only if same unit
     setItems((prev) => {
-      const existing = prev.find((i) => i.product_id === p.id);
+      const existing = prev.find(
+        (i) => i.product_id === p.id && i.sell_unit === chosenUnit
+      );
       if (existing) {
         return prev.map((i) =>
-          i.product_id === p.id
-            ? { ...i, quantity: roundQty(i.quantity + q, p.sell_unit) }
+          i.product_id === p.id && i.sell_unit === chosenUnit
+            ? { ...i, quantity: roundQty(i.quantity + q, chosenUnit) }
             : i
         );
       }
@@ -37,8 +55,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           product_id: p.id,
           name: p.name,
           unit: p.unit,
-          sell_unit: p.sell_unit,
-          price: p.price,
+          sell_unit: chosenUnit,
+          price,
           quantity: q,
         },
       ];

@@ -16,9 +16,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
-import { useCart } from "@/src/cart-context";
+import { availableUnits, priceFor, useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
-import { formatQty, parseQty, roundQty, stepFor, unitLabel, unitShort } from "@/src/units";
+import { formatQty, parseQty, roundQty, SellUnit, stepFor, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export default function ProductDetail() {
@@ -33,6 +33,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [qtyStr, setQtyStr] = useState("1");
+  const [selectedUnit, setSelectedUnit] = useState<SellUnit | null>(null);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -41,6 +42,9 @@ export default function ProductDetail() {
       try {
         const p = await api.getProduct(params.id!);
         setProduct(p);
+        // Preselect the product's default unit if available, else the only one that is
+        const units = availableUnits(p);
+        setSelectedUnit(units.includes(p.sell_unit) ? p.sell_unit : units[0] ?? null);
       } catch (e: any) {
         toast.show(e?.message || "Produit introuvable", "error");
         router.back();
@@ -50,7 +54,7 @@ export default function ProductDetail() {
     })();
   }, [params.id, router, toast]);
 
-  if (loading || !product) {
+  if (loading || !product || !selectedUnit) {
     return (
       <View style={[styles.root, { alignItems: "center", justifyContent: "center" }]}>
         <ActivityIndicator color={colors.brandPrimary} size="large" />
@@ -58,13 +62,26 @@ export default function ProductDetail() {
     );
   }
 
-  const step = stepFor(product.sell_unit);
-  const qNum = roundQty(parseQty(qtyStr), product.sell_unit);
-  const lineTotal = Math.round(qNum * product.price * 100) / 100;
+  const units = availableUnits(product);
+  const price = priceFor(product, selectedUnit) ?? 0;
+  const step = stepFor(selectedUnit);
+  const qNum = roundQty(parseQty(qtyStr), selectedUnit);
+  const lineTotal = Math.round(qNum * price * 100) / 100;
 
   const bumpQty = (delta: number) => {
-    const next = roundQty(Math.max(0, qNum + delta), product.sell_unit);
+    const next = roundQty(Math.max(0, qNum + delta), selectedUnit);
     setQtyStr(next > 0 ? formatQty(next) : "0");
+  };
+
+  const chooseUnit = (u: SellUnit) => {
+    if (!units.includes(u)) {
+      const other = u === "kg" ? "à la pièce" : "au kilo";
+      toast.show(`Ce produit est vendu ${other} uniquement`, "info");
+      return;
+    }
+    setSelectedUnit(u);
+    // Reset quantity to a sensible default when switching (e.g. 1)
+    setQtyStr("1");
   };
 
   const handleAdd = () => {
@@ -73,9 +90,9 @@ export default function ProductDetail() {
       return;
     }
     setAdding(true);
-    add(product, qNum);
+    add(product, qNum, selectedUnit);
     toast.show(
-      `${product.name} : ${formatQty(qNum)} ${unitShort(product.sell_unit)} ajouté(s)`,
+      `${product.name} : ${formatQty(qNum)} ${unitShort(selectedUnit)} ajouté(s)`,
       "success"
     );
     setTimeout(() => {
@@ -127,8 +144,8 @@ export default function ProductDetail() {
             <Text style={styles.meta}>{product.unit}</Text>
           </View>
           <Text style={styles.price} testID="detail-price">
-            {product.price.toFixed(2)} € HT
-            <Text style={styles.priceUnit}> / {unitLabel(product.sell_unit)}</Text>
+            {price.toFixed(2)} € HT
+            <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
           </Text>
 
           {/* Description */}
@@ -147,35 +164,25 @@ export default function ProductDetail() {
                 testID="unit-kg"
                 icon="package"
                 label="Au kilo"
-                active={product.sell_unit === "kg"}
-                available={product.sell_unit === "kg"}
-                onPress={() => {
-                  if (product.sell_unit !== "kg") {
-                    toast.show(
-                      "Ce produit est vendu à la pièce uniquement",
-                      "info"
-                    );
-                  }
-                }}
+                price={product.price_kg}
+                active={selectedUnit === "kg"}
+                available={units.includes("kg")}
+                onPress={() => chooseUnit("kg")}
               />
               <UnitChip
                 testID="unit-piece"
                 icon="box"
                 label="À la pièce"
-                active={product.sell_unit === "piece"}
-                available={product.sell_unit === "piece"}
-                onPress={() => {
-                  if (product.sell_unit !== "piece") {
-                    toast.show(
-                      "Ce produit est vendu au kilo uniquement",
-                      "info"
-                    );
-                  }
-                }}
+                price={product.price_piece}
+                active={selectedUnit === "piece"}
+                available={units.includes("piece")}
+                onPress={() => chooseUnit("piece")}
               />
             </View>
             <Text style={styles.unitHint}>
-              Ce produit est vendu {product.sell_unit === "kg" ? "au kilo" : "à la pièce"}.
+              {units.length === 2
+                ? "Choisissez l'unité qui vous convient."
+                : `Ce produit est vendu ${selectedUnit === "kg" ? "au kilo" : "à la pièce"}.`}
             </Text>
           </View>
 
@@ -197,11 +204,11 @@ export default function ProductDetail() {
                   value={qtyStr}
                   onChangeText={setQtyStr}
                   selectTextOnFocus
-                  keyboardType={product.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
+                  keyboardType={selectedUnit === "kg" ? "decimal-pad" : "number-pad"}
                   style={styles.qtyInput}
                   returnKeyType="done"
                 />
-                <Text style={styles.qtyUnit}>{unitShort(product.sell_unit)}</Text>
+                <Text style={styles.qtyUnit}>{unitShort(selectedUnit)}</Text>
               </View>
               <Pressable
                 testID="qty-inc"
@@ -247,6 +254,7 @@ export default function ProductDetail() {
 function UnitChip({
   icon,
   label,
+  price,
   active,
   available,
   onPress,
@@ -254,6 +262,7 @@ function UnitChip({
 }: {
   icon: string;
   label: string;
+  price?: number | null;
   active: boolean;
   available: boolean;
   onPress: () => void;
@@ -275,9 +284,14 @@ function UnitChip({
         pressed && { opacity: 0.8 },
       ]}
     >
-      <Feather name={icon as any} size={15} color={fg} />
-      <Text style={[styles.unitChipTxt, { color: fg }]}>{label}</Text>
-      {active ? <Feather name="check" size={14} color={fg} /> : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Feather name={icon as any} size={15} color={fg} />
+        <Text style={[styles.unitChipTxt, { color: fg }]}>{label}</Text>
+        {active ? <Feather name="check" size={14} color={fg} /> : null}
+      </View>
+      <Text style={[styles.unitChipPrice, { color: fg }]}>
+        {available && price != null ? `${price.toFixed(2)} €` : "—"}
+      </Text>
     </Pressable>
   );
 }
@@ -341,16 +355,17 @@ const useStyles = makeStyles((colors) => ({
   unitRow: { flexDirection: "row", gap: 10 },
   unitChip: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 6,
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 12,
+    minHeight: 62,
   },
   unitChipTxt: { fontSize: 14, fontWeight: "700" },
+  unitChipPrice: { fontSize: 13, fontWeight: "800" },
   unitHint: { fontSize: 12, color: colors.muted, marginTop: -2 },
 
   qtyRow: {

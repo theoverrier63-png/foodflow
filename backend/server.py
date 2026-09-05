@@ -97,8 +97,10 @@ class Product(BaseModel):
     category: str
     origin: str
     unit: str
-    sell_unit: str = "piece"  # "kg" or "piece"
+    sell_unit: str = "piece"  # default unit for quick-add
     price: float
+    price_kg: Optional[float] = None
+    price_piece: Optional[float] = None
     image_url: str
     description: str
 
@@ -253,6 +255,16 @@ async def startup():
         await db.products.insert_many(docs)
         logger.info(f"Seeded {len(docs)} products with sell_unit")
 
+    # Migrate to dual pricing: fill price_kg/price_piece from legacy price+sell_unit
+    async for p in db.products.find({"$or": [{"price_kg": {"$exists": False}}, {"price_piece": {"$exists": False}}]}):
+        set_fields = {}
+        if "price_kg" not in p:
+            set_fields["price_kg"] = p["price"] if p.get("sell_unit") == "kg" else None
+        if "price_piece" not in p:
+            set_fields["price_piece"] = p["price"] if p.get("sell_unit") == "piece" else None
+        if set_fields:
+            await db.products.update_one({"id": p["id"]}, {"$set": set_fields})
+
     # Seed default supplier (admin) account — only Leray-Pointel has admin access.
     admin_email = "sarl.leraypointel@orange.fr"
     admin_password = "Loic76930@"
@@ -401,17 +413,35 @@ class ProductIn(BaseModel):
     category: str = Field(min_length=1, max_length=100)
     origin: str = Field(min_length=1, max_length=100)
     unit: str = Field(min_length=1, max_length=100)
-    sell_unit: str = Field(default="piece")
-    price: float = Field(gt=0)
+    price_kg: Optional[float] = Field(default=None, gt=0)
+    price_piece: Optional[float] = Field(default=None, gt=0)
     image_url: str = Field(min_length=1, max_length=1000)
     description: str = Field(default="", max_length=1000)
 
-    @field_validator("sell_unit")
+    @field_validator("price_kg", "price_piece")
     @classmethod
-    def check_sell_unit(cls, v):
-        if v not in ("kg", "piece"):
-            raise ValueError("sell_unit doit être 'kg' ou 'piece'")
-        return v
+    def norm_prices(cls, v):
+        return None if v in (0, 0.0) else v
+
+    def resolved(self) -> dict:
+        """Return the persistable dict with derived sell_unit and price."""
+        if self.price_kg is None and self.price_piece is None:
+            raise HTTPException(422, "Au moins un prix (au kilo ou à la pièce) est requis")
+        # Default: prefer kg when both provided
+        sell_unit = "kg" if self.price_kg is not None else "piece"
+        price = self.price_kg if sell_unit == "kg" else self.price_piece
+        return {
+            "name": self.name.strip(),
+            "category": self.category.strip(),
+            "origin": self.origin.strip(),
+            "unit": self.unit.strip(),
+            "sell_unit": sell_unit,
+            "price": price,
+            "price_kg": self.price_kg,
+            "price_piece": self.price_piece,
+            "image_url": self.image_url.strip(),
+            "description": self.description or "",
+        }
 
 
 class StatusUpdate(BaseModel):
@@ -432,7 +462,7 @@ async def admin_statuses(_: dict = Depends(require_admin)):
 
 @api.post("/admin/products", response_model=Product, status_code=201)
 async def admin_create_product(body: ProductIn, _: dict = Depends(require_admin)):
-    doc = {"id": str(uuid.uuid4()), **body.model_dump()}
+    doc = {"id": str(uuid.uuid4()), **body.resolved()}
     await db.products.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -442,7 +472,7 @@ async def admin_create_product(body: ProductIn, _: dict = Depends(require_admin)
 async def admin_update_product(product_id: str, body: ProductIn, _: dict = Depends(require_admin)):
     updated = await db.products.find_one_and_update(
         {"id": product_id},
-        {"$set": body.model_dump()},
+        {"$set": body.resolved()},
         projection={"_id": 0},
         return_document=True,
     )
