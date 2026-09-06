@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 7 — 'Habitudes de commande' (order habits) feature fully verified end-to-end. Backend: 6/6 pytest cases in /app/backend/tests/test_habits.py pass — (1) GET /api/orders/habits without auth → 401, (2) with a company account that has zero orders → [], (3) after posting order-1 (Carottes×2 + Bananes×1) and order-2 (Carottes×1 + Tomates×1) as test@leray.fr, GET /orders/habits ranks Carottes first (present in 2 orders) with Bananes and Tomates also in the list, (4) `limit=1` truncates to a single product, (5) season filter — created a TEST_Melon summer product, ordered it as company, and confirmed that flipping global season to 'winter' EXCLUDES the melon from habits while 'summer' or 'all' INCLUDES it; product deleted and season reset to 'all' at the end, (6) response shape is a list of Product dicts with id/name/category/unit/image_url and NO Mongo `_id`. Frontend (mobile viewport 390×844 on public URL): (a) test@leray.fr business/approved login → catalog renders products-list AND habits-block at the top with 3 cards (Carottes, Bananes, Tomates grappe), each showing name + 'X.XX € HT' price + Ajouter button — HT suffix confirmed for business; (b) tapping habit-add-<id> shows toast 'Carottes ajouté (1 kg)' AND cart tab-bar badge increments to 1; (c) tapping the card body (habit-<id>) routes to /product-detail?id=<id> with the correct product id; (d) typing 'carott' in the search box HIDES the habits block, clearing it RESTORES it; (e) selecting cat-chip-Fruits HIDES the habits block, cat-chip-Tous RESTORES it; (f) logging in as personal account (perso+ttctest@leray.fr) — habits block is NOT rendered AND price line shows 'TTC' suffix (business-only guard works, TTC/HT regression still green); (g) logging in as a freshly-registered PENDING business account — habits block is NOT rendered while pending-status-banner IS shown (approved-only guard works). Prior features regression: admin auth still works, GET /api/settings/season returns {'season':'all'} publicly, GET /api/admin/orders/{id}/invoice returns 200 application/pdf (2797 bytes) — HT/TTC labels + Season screen + PDF invoice from admin orders all intact. Cleanup performed: 2 seeded orders and the pending test business user removed from MongoDB; global season left at 'all'; TEST_Melon product deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/orders/export", "issue": "Route ordering bug (pre-existing, NOT caused by iter7): /admin/orders/{order_id} is registered at line 637 BEFORE /admin/orders/export at line 836, so FastAPI matches {order_id}='export' and returns 404 'Commande introuvable' with application/json. Move the /admin/orders/export handler ABOVE the /admin/orders/{order_id} handler (or use a distinct prefix like /admin/exports/orders). Not in the iter7 acceptance list but flagged since export was reported working in iter2."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' — still emitted on every toast fire (unchanged from iter 3-6). Reference: /app/frontend/src/toast.tsx:38"},
+      {"component": "Animated (web)", "issue": "Pre-existing web-only warning 'Animated: useNativeDriver is not supported… Falling back to JS-based animation.' emitted the first time the habits/toast animation runs. Web-only (Expo Go/native builds unaffected). No code change required."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_habits.py",
+    "/app/test_reports/pytest/iter7_habits.xml",
+    "/app/test_reports/iteration_7.json"
+  ],
+  "action_items": [
+    "(Optional/out-of-scope for iter7) Fix route ordering: move `@api.get('/admin/orders/export')` ABOVE `@api.get('/admin/orders/{order_id}')` in /app/backend/server.py so the export endpoint stops being shadowed and returning 404.",
+    "(Carry-over) Move `pointerEvents='none'` from prop to style in /app/frontend/src/toast.tsx to silence the RN deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "server.py `/orders/habits` correctly requires auth via Depends(current_user) (returns 401 without a token — verified).",
+    "server.py `/orders/habits` ranks by (orders count DESC, total qty DESC) using a per-order dedup set so ordering the same product twice in one cart still only counts once for `orders` — semantically correct per the spec ('orders count primary, total quantity tiebreaker').",
+    "server.py `/orders/habits` reuses `_get_current_season()` and applies the same `season ∈ {'all', current}` filter used by the public product listing — season logic is consistent between catalog and habits (verified test_05).",
+    "server.py `/orders/habits` projects `{'_id': 0}` — no ObjectId leaked in the JSON payload (verified test_06).",
+    "server.py `/orders/habits` gracefully returns [] on `freq` empty (no orders) — no 500 (verified test_02).",
+    "server.py `/orders/habits` uses `limit: int = 8` as a query param with no upper cap. Not a security issue given the response is already bounded by the user's own orders (max 500 fetched via `to_list(500)`), but a `Query(default=8, ge=1, le=50)` would be more defensive.",
+    "index.tsx `showHabits` computes the guard as business + approved + selectedCat==='Tous' + !search.trim() + habits.length>0 — matches the spec exactly and verified for all 5 conditions in the UI.",
+    "index.tsx habits load runs inside the same `Promise.all` as products/categories/banner and short-circuits with `Promise.resolve([])` for non-business/approved — no wasted network calls for personal/pending users (verified 200 for personal but frontend ignores it).",
+    "index.tsx `habit-add-<id>` uses `e.stopPropagation?.()` inside a nested Pressable so tapping the add button does NOT also trigger the outer navigation to product-detail (verified — separate flows).",
+    "index.tsx habit price uses `priceFor(p, p.sell_unit, priceModeFor(user)) ?? p.price` → falls back to the underlying HT price if TTC override is null (defensive, consistent with iter6).",
+    "index.tsx habit card renders `<Text>` for name/price/Ajouter — no raw text outside Text, no `<div>`/`<span>`; StyleSheet.create used for all styles. React-Native compliant.",
+    "api.ts `orderHabits(limit=8)` uses the same `request<Product[]>` helper as `products()` — auth header, error handling, and JSON typing all inherited. No hardcoded URL.",
+    "PRE-EXISTING (not iter7): server.py route ordering of /admin/orders/export vs /admin/orders/{order_id} causes /export to 404. Would break admin CSV export in the UI."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_habits.py (new — 6 pytest cases for the /orders/habits endpoint incl. auth, ranking, limit, season filter, shape)"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 iter7 habit tests)",
+    "frontend": "100% for the iter7 acceptance list (business habits block visible w/ HT + toast + badge + navigation + search/category hide-restore; personal no-habits + TTC preserved; pending business no-habits + banner visible). Prior admin PDF invoice and public season endpoint also verified."
+  },
+  "seed_data_creation": "Temporary: 2 seeded orders on test@leray.fr (Carottes+Bananes / Carottes+Tomates), 1 pending business user (pending+habits+0692@leray.fr), 1 TEST_Melon summer product. ALL cleaned up at the end (verified via Mongo direct: orders deleted 2, users deleted 1; melon deleted via API). Global season reset to 'all'. Iter6 personal user (perso+ttctest@leray.fr / Test1234!) reused, still present.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Order-habits testIDs on the client catalog: `habits-block` (wrapper), `habit-<productId>` (card body → routes to /product-detail), `habit-add-<productId>` (add-1-unit button). Guard is business+approved+Tous+!search+habits.length>0. Backend endpoint: GET /api/orders/habits?limit=N — auth required, filters by current global season (`GET /api/settings/season`), ranks by orders-count then qty. Test company user is test@leray.fr / Test1234! (id 805f6c01-…). For seeding habits data quickly, POST /api/orders with `notes` prefixed 'TEST_' or 'seed order' so it's easy to delete via Mongo (there is NO DELETE-order API endpoint — cleanup must go through Mongo `db.orders.delete_many`). Cart tab badge has no dedicated testID — visible text `1`, `2`, … inside the Panier tab item is the reliable signal. Known pre-existing bug: GET /api/admin/orders/export returns 404 because /admin/orders/{order_id} is registered first — swap the order in server.py to fix.",
+  "rca_of_issue": "N/A — feature verification only. All acceptance criteria in the iter7 review request met against the running backend and Expo web preview on https://foodflow-145.preview.emergentagent.com."
+}

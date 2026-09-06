@@ -144,6 +144,7 @@ export const api = {
       body: JSON.stringify({ items, notes }),
     }),
   orders: () => request<Order[]>("/orders"),
+  orderHabits: (limit = 8) => request<Product[]>(`/orders/habits?limit=${limit}`),
 
   // ============ Admin ============
   adminStatuses: () => request<{ statuses: string[] }>("/admin/statuses"),

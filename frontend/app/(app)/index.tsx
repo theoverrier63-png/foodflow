@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
@@ -31,6 +31,7 @@ export default function Catalog() {
   const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [habits, setHabits] = useState<Product[]>([]);
   const [cats, setCats] = useState<string[]>(["Tous"]);
   const [selectedCat, setSelectedCat] = useState("Tous");
   const [search, setSearch] = useState("");
@@ -39,28 +40,45 @@ export default function Catalog() {
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
-  async function load() {
+  const showHabits =
+    user?.account_type === "business" &&
+    user?.status === "approved" &&
+    selectedCat === "Tous" &&
+    !search.trim() &&
+    habits.length > 0;
+
+  const load = useCallback(async () => {
     try {
       setError(null);
-      const [cs, ps, bn] = await Promise.all([
+      const canFetchHabits =
+        user?.account_type === "business" && user?.status === "approved";
+      const [cs, ps, bn, hs] = await Promise.all([
         api.categories(),
         api.products(),
         api.getBanner().catch(() => ({ image_url: null })),
+        canFetchHabits ? api.orderHabits(8).catch(() => []) : Promise.resolve([]),
       ]);
       setCats(cs.categories);
       setProducts(ps);
       setBanner(bn.image_url);
+      setHabits(hs);
     } catch (e: any) {
       setError(e?.message || "Erreur");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [user?.account_type, user?.status]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const filtered = useMemo(() => {
     let list = products;
@@ -186,6 +204,73 @@ export default function Catalog() {
                     Compte en attente de validation par Leray-Pointel. Vous ne pouvez pas
                     encore passer de commande.
                   </Text>
+                </View>
+              ) : null}
+              {showHabits ? (
+                <View style={styles.habitsBlock} testID="habits-block">
+                  <View style={styles.habitsHeader}>
+                    <Feather name="repeat" size={14} color={colors.brandPrimary} />
+                    <Text style={styles.habitsTitle}>Vos habitudes de commande</Text>
+                  </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.habitsRow}
+                  >
+                    {habits.map((p) => {
+                      const dp = priceFor(p, p.sell_unit, priceModeFor(user)) ?? p.price;
+                      return (
+                        <Pressable
+                          key={p.id}
+                          testID={`habit-${p.id}`}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(app)/product-detail",
+                              params: { id: p.id },
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.habitCard,
+                            pressed && { opacity: 0.85 },
+                          ]}
+                        >
+                          <Image
+                            source={{ uri: p.image_url }}
+                            style={styles.habitImg}
+                            contentFit="cover"
+                            transition={200}
+                          />
+                          <Text style={styles.habitName} numberOfLines={1}>
+                            {p.name}
+                          </Text>
+                          <Text style={styles.habitPrice}>
+                            {dp.toFixed(2)} € {priceLabelFor(priceModeFor(user))}
+                          </Text>
+                          <Pressable
+                            testID={`habit-add-${p.id}`}
+                            hitSlop={8}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              const step = p.sell_unit === "kg" ? 1 : 1;
+                              add(p, step, undefined, priceModeFor(user));
+                              toast.show(
+                                `${p.name} ajouté (${step} ${unitShort(p.sell_unit)})`,
+                                "success"
+                              );
+                            }}
+                            style={({ pressed }) => [
+                              styles.habitAdd,
+                              pressed && { opacity: 0.85 },
+                            ]}
+                          >
+                            <Feather name="plus" size={14} color={colors.onBrandPrimary} />
+                            <Text style={styles.habitAddTxt}>Ajouter</Text>
+                          </Pressable>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                  <View style={styles.habitsDivider} />
                 </View>
               ) : null}
             </View>
@@ -380,6 +465,55 @@ const useStyles = makeStyles((colors) => ({
     marginBottom: 12,
   },
   pendingTxt: { color: colors.onWarning, fontSize: 12, fontWeight: "600", flex: 1 },
+  habitsBlock: { marginBottom: 12 },
+  habitsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  habitsTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.onSurface,
+    letterSpacing: 0.3,
+  },
+  habitsRow: { gap: 10, paddingRight: 4 },
+  habitCard: {
+    width: 148,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: colors.brandSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  habitImg: {
+    width: "100%",
+    height: 82,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceTertiary,
+  },
+  habitName: { fontSize: 13, fontWeight: "700", color: colors.onSurface },
+  habitPrice: { fontSize: 12, fontWeight: "800", color: colors.brandPrimary },
+  habitAdd: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.brandPrimary,
+  },
+  habitAddTxt: { color: colors.onBrandPrimary, fontSize: 12, fontWeight: "700" },
+  habitsDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginTop: 12,
+    marginBottom: 4,
+  },
   cardTapArea: {
     flexDirection: "row",
     alignItems: "center",

@@ -492,6 +492,37 @@ async def list_orders(user: dict = Depends(current_user)):
     return docs
 
 
+@api.get("/orders/habits", response_model=List[Product])
+async def order_habits(user: dict = Depends(current_user), limit: int = 8):
+    """Return the user's most frequently ordered products, honoring the current season filter."""
+    orders = await db.orders.find({"user_id": user["id"]}, {"_id": 0, "items": 1}).to_list(500)
+    # Score: appearances across orders (primary) + total quantity (tiebreaker)
+    freq: dict[str, dict] = {}
+    for o in orders:
+        seen_in_order = set()
+        for it in o.get("items", []):
+            pid = it.get("product_id")
+            if not pid:
+                continue
+            entry = freq.setdefault(pid, {"orders": 0, "qty": 0.0})
+            if pid not in seen_in_order:
+                entry["orders"] += 1
+                seen_in_order.add(pid)
+            entry["qty"] += float(it.get("quantity", 0) or 0)
+    if not freq:
+        return []
+    ranked_ids = sorted(freq.keys(), key=lambda p: (freq[p]["orders"], freq[p]["qty"]), reverse=True)
+    # Filter by current season
+    current = await _get_current_season()
+    q = {"id": {"$in": ranked_ids}}
+    if current != "all":
+        q["season"] = {"$in": ["all", current]}
+    docs = await db.products.find(q, {"_id": 0}).to_list(200)
+    by_id = {d["id"]: d for d in docs}
+    ordered = [by_id[pid] for pid in ranked_ids if pid in by_id]
+    return ordered[:limit]
+
+
 @api.get("/orders/{order_id}/invoice-pdf")
 async def customer_invoice_pdf(order_id: str, user: dict = Depends(current_user)):
     doc = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
@@ -595,6 +626,23 @@ async def admin_delete_product(product_id: str, _: dict = Depends(require_admin)
     if res.deleted_count == 0:
         raise HTTPException(404, "Produit introuvable")
     return None
+
+
+@api.get("/admin/orders/export")
+async def admin_export_all(_: dict = Depends(require_admin)):
+    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    lines = ["Numéro,Date,Client,SIRET livraison,Statut,Nb articles,Total HT"]
+    for o in docs:
+        lines.append(",".join([
+            _csv_escape("#" + o["id"][:8].upper()),
+            _csv_escape(o["created_at"]),
+            _csv_escape(o["company_name"]),
+            _csv_escape(o["delivery_address"]),
+            _csv_escape(o["status"]),
+            _csv_escape(sum(i["quantity"] for i in o["items"])),
+            _csv_escape(f"{o['total']:.2f}"),
+        ]))
+    return {"filename": "commandes-export.csv", "content": "\n".join(lines), "count": len(docs)}
 
 
 @api.get("/admin/orders", response_model=List[Order])
@@ -800,23 +848,6 @@ async def admin_invoice(order_id: str, _: dict = Depends(require_admin)):
     if not o:
         raise HTTPException(404, "Commande introuvable")
     return _pdf_response(o)
-
-
-@api.get("/admin/orders/export")
-async def admin_export_all(_: dict = Depends(require_admin)):
-    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
-    lines = ["Numéro,Date,Client,SIRET livraison,Statut,Nb articles,Total HT"]
-    for o in docs:
-        lines.append(",".join([
-            _csv_escape("#" + o["id"][:8].upper()),
-            _csv_escape(o["created_at"]),
-            _csv_escape(o["company_name"]),
-            _csv_escape(o["delivery_address"]),
-            _csv_escape(o["status"]),
-            _csv_escape(sum(i["quantity"] for i in o["items"])),
-            _csv_escape(f"{o['total']:.2f}"),
-        ]))
-    return {"filename": "commandes-export.csv", "content": "\n".join(lines), "count": len(docs)}
 
 
 # ---- Pending business accounts ----
