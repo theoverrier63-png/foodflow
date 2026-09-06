@@ -29,6 +29,7 @@ export default function Cart() {
   const { items, inc, dec, remove, setQty, total, clear } = useCart();
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState("");
   const toast = useToast();
   const router = useRouter();
 
@@ -40,8 +41,9 @@ export default function Cart() {
     }
     try {
       setBusy(true);
-      await api.createOrder(items);
+      await api.createOrder(items, notes.trim());
       clear();
+      setNotes("");
       toast.show("Commande envoyée !", "success");
       router.push("/(app)/orders");
     } catch (e: any) {
@@ -78,12 +80,27 @@ export default function Cart() {
           <FlatList
             testID="cart-list"
             data={items}
-            keyExtractor={(i) => i.product_id}
+            keyExtractor={(i) => i.product_id + i.sell_unit}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: 220 + insets.bottom,
+              paddingBottom: 300 + insets.bottom,
               gap: 10,
             }}
+            ListFooterComponent={
+              <View style={styles.notesCard} testID="notes-card">
+                <Text style={styles.notesLabel}>Commentaire / spécifications</Text>
+                <TextInput
+                  testID="order-notes-input"
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Ex : livraison avant 10h, produits bien mûrs…"
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  numberOfLines={3}
+                  style={styles.notesInput}
+                />
+              </View>
+            }
             renderItem={({ item }) => (
               <CartRow
                 item={item}
@@ -301,6 +318,27 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 11,
     fontWeight: "700",
     color: colors.muted,
+  },
+  notesCard: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+    gap: 8,
+  },
+  notesLabel: { fontSize: 13, fontWeight: "700", color: colors.onSurface },
+  notesInput: {
+    minHeight: 80,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    fontSize: 14,
+    color: colors.onSurface,
+    textAlignVertical: "top",
   },
   delBtn: {
     width: 32,
