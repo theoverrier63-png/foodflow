@@ -16,7 +16,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
-import { availableUnits, priceFor, useCart } from "@/src/cart-context";
+import { useAuth } from "@/src/auth-context";
+import { availableUnits, priceFor, priceLabelFor, priceModeFor, useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, roundQty, SellUnit, stepFor, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -29,6 +30,9 @@ export default function ProductDetail() {
   const toast = useToast();
   const params = useLocalSearchParams<{ id?: string }>();
   const { add } = useCart();
+  const { user } = useAuth();
+  const priceMode = priceModeFor(user);
+  const priceLabel = priceLabelFor(priceMode);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +67,7 @@ export default function ProductDetail() {
   }
 
   const units = availableUnits(product);
-  const price = priceFor(product, selectedUnit) ?? 0;
+  const price = priceFor(product, selectedUnit, priceMode) ?? 0;
   const step = stepFor(selectedUnit);
   const qNum = roundQty(parseQty(qtyStr), selectedUnit);
   const lineTotal = Math.round(qNum * price * 100) / 100;
@@ -90,7 +94,7 @@ export default function ProductDetail() {
       return;
     }
     setAdding(true);
-    add(product, qNum, selectedUnit);
+    add(product, qNum, selectedUnit, priceMode);
     toast.show(
       `${product.name} : ${formatQty(qNum)} ${unitShort(selectedUnit)} ajouté(s)`,
       "success"
@@ -145,7 +149,7 @@ export default function ProductDetail() {
           </View>
           {selectedUnit === "kg" ? (
             <Text style={styles.price} testID="detail-price">
-              {price.toFixed(2)} € HT
+              {price.toFixed(2)} € {priceLabel}
               <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
             </Text>
           ) : (
@@ -170,7 +174,7 @@ export default function ProductDetail() {
                 testID="unit-kg"
                 icon="package"
                 label="Au kilo"
-                price={product.price_kg}
+                price={priceFor(product, "kg", priceMode)}
                 showPrice
                 active={selectedUnit === "kg"}
                 available={units.includes("kg")}
@@ -180,7 +184,7 @@ export default function ProductDetail() {
                 testID="unit-piece"
                 icon="box"
                 label="À la pièce"
-                price={product.price_piece}
+                price={priceFor(product, "piece", priceMode)}
                 showPrice={false}
                 active={selectedUnit === "piece"}
                 available={units.includes("piece")}
@@ -229,7 +233,7 @@ export default function ProductDetail() {
             </View>
             {selectedUnit === "kg" ? (
               <View style={styles.subtotal}>
-                <Text style={styles.subtotalLabel}>Sous-total HT</Text>
+                <Text style={styles.subtotalLabel}>Sous-total {priceLabel}</Text>
                 <Text style={styles.subtotalVal} testID="detail-subtotal">
                   {lineTotal.toFixed(2)} €
                 </Text>

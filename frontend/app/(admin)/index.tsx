@@ -154,6 +154,13 @@ export default function AdminDashboard() {
           onPress={() => router.push("/(admin)/pending")}
         />
         <ActionRow
+          testID="nav-season"
+          icon="sun"
+          title="Saison en cours"
+          subtitle="Été, hiver, toute l'année — filtre auto du catalogue"
+          onPress={() => router.push("/(admin)/season")}
+        />
+        <ActionRow
           testID="nav-banner"
           icon="image"
           title="Bannière d'accueil"

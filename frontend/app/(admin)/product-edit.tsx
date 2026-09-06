@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
-import { api, Product } from "@/src/api";
+import { api } from "@/src/api";
 import { useToast } from "@/src/toast";
 import { pickImageAsDataUrl } from "@/src/image-picker";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -26,6 +26,7 @@ type Form = {
   unit: string;
   image_url: string;
   description: string;
+  season: "summer" | "winter" | "all";
 };
 
 const EMPTY: Form = {
@@ -36,9 +37,16 @@ const EMPTY: Form = {
   image_url:
     "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600",
   description: "",
+  season: "all",
 };
 
 const CATEGORIES = ["Fruits", "Légumes", "Herbes"];
+
+const SEASONS: { key: Form["season"]; label: string; icon: string }[] = [
+  { key: "all", label: "Toute l'année", icon: "refresh-cw" },
+  { key: "summer", label: "Été", icon: "sun" },
+  { key: "winter", label: "Hiver", icon: "cloud-snow" },
+];
 
 export default function ProductEdit() {
   const insets = useSafeAreaInsets();
@@ -52,6 +60,8 @@ export default function ProductEdit() {
   const [form, setForm] = useState<Form>(EMPTY);
   const [priceKgStr, setPriceKgStr] = useState("");
   const [pricePieceStr, setPricePieceStr] = useState("");
+  const [priceKgTtcStr, setPriceKgTtcStr] = useState("");
+  const [pricePieceTtcStr, setPricePieceTtcStr] = useState("");
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
 
@@ -73,9 +83,12 @@ export default function ProductEdit() {
           unit: p.unit,
           image_url: p.image_url,
           description: p.description,
+          season: (p.season as any) ?? "all",
         });
         setPriceKgStr(p.price_kg != null ? String(p.price_kg) : "");
         setPricePieceStr(p.price_piece != null ? String(p.price_piece) : "");
+        setPriceKgTtcStr(p.price_kg_ttc != null ? String(p.price_kg_ttc) : "");
+        setPricePieceTtcStr(p.price_piece_ttc != null ? String(p.price_piece_ttc) : "");
       } catch (e: any) {
         toast.show(e?.message || "Erreur", "error");
       } finally {
@@ -96,15 +109,19 @@ export default function ProductEdit() {
   async function submit() {
     const priceKg = parsePrice(priceKgStr);
     const pricePiece = parsePrice(pricePieceStr);
+    const priceKgTtc = parsePrice(priceKgTtcStr);
+    const pricePieceTtc = parsePrice(pricePieceTtcStr);
     if (!form.name.trim()) return toast.show("Nom requis", "error");
     if (!form.unit.trim()) return toast.show("Format requis", "error");
     if (priceKg == null && pricePiece == null)
-      return toast.show("Saisissez au moins un prix (kg ou pièce)", "error");
+      return toast.show("Saisissez au moins un prix HT (kg ou pièce)", "error");
     if (!form.image_url.trim()) return toast.show("Image requise", "error");
     const payload = {
       ...form,
       price_kg: priceKg ?? undefined,
       price_piece: pricePiece ?? undefined,
+      price_kg_ttc: priceKgTtc ?? undefined,
+      price_piece_ttc: pricePieceTtc ?? undefined,
     };
     try {
       setSaving(true);
@@ -231,9 +248,9 @@ export default function ProductEdit() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Prix HT</Text>
+          <Text style={styles.label}>Prix HT (Pros)</Text>
           <Text style={styles.hint}>
-            Renseignez au moins un prix. Laissez vide l'unité non applicable.
+            Prix affichés aux comptes professionnels. Renseignez au moins un prix.
           </Text>
           <View style={styles.row}>
             <View style={[styles.field, { flex: 1, gap: 4 }]}>
@@ -263,6 +280,83 @@ export default function ProductEdit() {
           </View>
         </View>
 
+        <View style={styles.field}>
+          <Text style={styles.label}>Prix TTC (Particuliers)</Text>
+          <Text style={styles.hint}>
+            Prix affichés aux comptes particuliers. Laissez vide pour utiliser le prix HT.
+          </Text>
+          <View style={styles.row}>
+            <View style={[styles.field, { flex: 1, gap: 4 }]}>
+              <Text style={styles.subLabel}>Au kilo (€/kg)</Text>
+              <TextInput
+                testID="edit-price-kg-ttc"
+                value={priceKgTtcStr}
+                onChangeText={setPriceKgTtcStr}
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+            <View style={[styles.field, { flex: 1, gap: 4 }]}>
+              <Text style={styles.subLabel}>À la pièce (€/pce)</Text>
+              <TextInput
+                testID="edit-price-piece-ttc"
+                value={pricePieceTtcStr}
+                onChangeText={setPricePieceTtcStr}
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Saison</Text>
+          <Text style={styles.hint}>
+            Le produit sera masqué automatiquement hors saison.
+          </Text>
+          <View style={styles.chipsRow}>
+            {SEASONS.map((s) => {
+              const active = form.season === s.key;
+              return (
+                <Pressable
+                  key={s.key}
+                  testID={`season-${s.key}`}
+                  onPress={() => set("season", s.key)}
+                  style={[
+                    styles.chip,
+                    {
+                      flexDirection: "row",
+                      gap: 6,
+                    },
+                    active
+                      ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                      : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                  ]}
+                >
+                  <Feather
+                    name={s.icon as any}
+                    size={13}
+                    color={active ? colors.onBrandPrimary : colors.onSurface}
+                  />
+                  <Text
+                    style={{
+                      color: active ? colors.onBrandPrimary : colors.onSurface,
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {s.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <Pressable
           testID="pick-image-btn"
           onPress={async () => {
@@ -280,7 +374,7 @@ export default function ProductEdit() {
         </Pressable>
 
         <View style={styles.field}>
-          <Text style={styles.label}>URL de l'image (optionnel)</Text>
+          <Text style={styles.label}>URL de l&apos;image (optionnel)</Text>
           <TextInput
             testID="edit-image"
             value={form.image_url.startsWith("data:") ? "" : form.image_url}

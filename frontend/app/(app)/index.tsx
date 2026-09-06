@@ -16,7 +16,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { useCart } from "@/src/cart-context";
+import { priceFor, priceLabelFor, priceModeFor, useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, roundQty, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -193,6 +193,7 @@ export default function Catalog() {
           renderItem={({ item }) => (
             <ProductRow
               product={item}
+              priceMode={priceModeFor(user)}
               onOpen={() =>
                 router.push({
                   pathname: "/(app)/product-detail",
@@ -200,7 +201,7 @@ export default function Catalog() {
                 })
               }
               onAdd={(q) => {
-                add(item, q);
+                add(item, q, undefined, priceModeFor(user));
                 toast.show(
                   `${item.name} ajouté (${formatQty(q)} ${unitShort(item.sell_unit)})`,
                   "success"
@@ -216,16 +217,19 @@ export default function Catalog() {
 
 function ProductRow({
   product,
+  priceMode,
   onAdd,
   onOpen,
 }: {
   product: Product;
+  priceMode: "ht" | "ttc";
   onAdd: (quantity: number) => void;
   onOpen: () => void;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [qtyStr, setQtyStr] = React.useState(product.sell_unit === "kg" ? "1" : "1");
+  const displayPrice = priceFor(product, product.sell_unit, priceMode) ?? product.price;
 
   const submit = () => {
     const q = roundQty(parseQty(qtyStr), product.sell_unit);
@@ -258,7 +262,7 @@ function ProductRow({
             <Text style={styles.cardMeta}>{product.unit}</Text>
           </View>
           <Text style={styles.cardPrice}>
-            {product.price.toFixed(2)} € HT
+            {displayPrice.toFixed(2)} € {priceLabelFor(priceMode)}
             <Text style={styles.cardPriceUnit}> / {unitLabel(product.sell_unit)}</Text>
           </Text>
         </View>

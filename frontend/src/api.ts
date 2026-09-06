@@ -78,6 +78,9 @@ export type Product = {
   price: number;
   price_kg?: number | null;
   price_piece?: number | null;
+  price_kg_ttc?: number | null;
+  price_piece_ttc?: number | null;
+  season?: "summer" | "winter" | "all";
   image_url: string;
   description: string;
 };
@@ -171,4 +174,12 @@ export const api = {
       body: JSON.stringify({ image_url }),
     }),
   deleteBanner: () => request<void>("/admin/banner", { method: "DELETE" }),
+
+  // ============ Season (global) ============
+  getSeason: () => request<{ season: "summer" | "winter" | "all" }>("/settings/season"),
+  setSeason: (season: "summer" | "winter" | "all") =>
+    request<{ season: string }>("/admin/settings/season", {
+      method: "PUT",
+      body: JSON.stringify({ season }),
+    }),
 };

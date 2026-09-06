@@ -42,3 +42,10 @@ Auto-seeded admin (`admin@leray-pointel.fr` / `admin1234`) logs in and is routed
 - **Export** — download a CSV of all orders
 
 CSV downloads: web = blob + anchor; native = share sheet. Backend adds `role` field on users, `require_admin` dependency, `/api/admin/*` routes.
+
+## HT/TTC Pricing + Seasons (v3)
+- Products now carry **HT prices** (`price_kg`, `price_piece`) shown to Pros/Business + **TTC prices** (`price_kg_ttc`, `price_piece_ttc`) shown to Personal customers.
+- Manual entry of both HT and TTC by the admin (no VAT calculation). If TTC is empty, it falls back silently to HT.
+- Each product has a **season** field: `summer`, `winter`, or `all`.
+- Global setting `current_season` (default `all`) — admin toggles it manually via the "Saison en cours" screen. Products marked with the off-season are hidden from the client catalog automatically.
+- New endpoints: `GET /api/settings/season` (public), `PUT /api/admin/settings/season` (admin only).

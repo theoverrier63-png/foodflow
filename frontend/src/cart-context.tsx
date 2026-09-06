@@ -1,16 +1,38 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
-import { CartItem, Product } from "./api";
+import { CartItem, Product, User } from "./api";
 import { roundQty, stepFor, SellUnit } from "./units";
 
-export function priceFor(product: Product, unit: SellUnit): number | null {
+// HT prices (used for pros = "business" & admin)
+export function priceForHt(product: Product, unit: SellUnit): number | null {
   if (unit === "kg") return product.price_kg ?? (product.sell_unit === "kg" ? product.price : null);
   return product.price_piece ?? (product.sell_unit === "piece" ? product.price : null);
 }
 
+// TTC prices (used for personal buyers). Fallback silently to HT if not filled yet.
+export function priceForTtc(product: Product, unit: SellUnit): number | null {
+  if (unit === "kg") return product.price_kg_ttc ?? priceForHt(product, unit);
+  return product.price_piece_ttc ?? priceForHt(product, unit);
+}
+
+export type PriceMode = "ht" | "ttc";
+
+export function priceModeFor(user?: Pick<User, "account_type"> | null): PriceMode {
+  return user?.account_type === "personal" ? "ttc" : "ht";
+}
+
+export function priceLabelFor(mode: PriceMode): string {
+  return mode === "ttc" ? "TTC" : "HT";
+}
+
+// Compute the price to actually display / bill for a given (product, unit, user).
+export function priceFor(product: Product, unit: SellUnit, mode: PriceMode = "ht"): number | null {
+  return mode === "ttc" ? priceForTtc(product, unit) : priceForHt(product, unit);
+}
+
 export function availableUnits(product: Product): SellUnit[] {
   const units: SellUnit[] = [];
-  if (priceFor(product, "kg") != null) units.push("kg");
-  if (priceFor(product, "piece") != null) units.push("piece");
+  if (priceForHt(product, "kg") != null) units.push("kg");
+  if (priceForHt(product, "piece") != null) units.push("piece");
   return units;
 }
 
@@ -18,7 +40,7 @@ type CartCtx = {
   items: CartItem[];
   count: number;
   total: number;
-  add: (p: Product, quantity?: number, unit?: SellUnit) => void;
+  add: (p: Product, quantity?: number, unit?: SellUnit, mode?: PriceMode) => void;
   setQty: (productId: string, quantity: number) => void;
   inc: (productId: string) => void;
   dec: (productId: string) => void;
@@ -31,9 +53,9 @@ const CartContext = createContext<CartCtx | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const add = useCallback((p: Product, quantity = 1, unit?: SellUnit) => {
+  const add = useCallback((p: Product, quantity = 1, unit?: SellUnit, mode: PriceMode = "ht") => {
     const chosenUnit: SellUnit = unit ?? p.sell_unit;
-    const price = priceFor(p, chosenUnit);
+    const price = priceFor(p, chosenUnit, mode);
     if (price == null) return;
     const q = roundQty(quantity, chosenUnit);
     if (q <= 0) return;

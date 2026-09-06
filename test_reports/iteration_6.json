@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 6 — HT/TTC pricing + Season (global + per-product) feature verified end-to-end. Backend: 12/12 pytest cases pass in /app/backend/tests/test_season_httc.py — (1) GET /api/settings/season returns {season:'all'} publicly (no auth), (2) PUT /api/admin/settings/season with valid seasons ('winter','summer','all') → 200 and value round-trips via public GET, (3) invalid season → 422, (4) non-admin PUT → 403, (5) no-token PUT → 401/403, (6) POST /admin/products with price_kg=3.0, price_kg_ttc=3.30, season='summer' → 201 with all three persisted and price_piece_ttc=null, (7) with current_season='winter' GET /products EXCLUDES the summer melon while still returning all season='all' seed products, (8) switching to 'summer' re-includes the melon, (9) 'all' returns everything, (10) PUT /admin/products/{id} updates price_kg_ttc from 3.30→3.50 and GET confirms persistence, (11) all seed products have season='all' post-migration, (12) every product exposes price_kg_ttc and price_piece_ttc fields. Frontend: Admin login → dashboard shows nav-season row → Season screen renders exactly 3 options (season-opt-all, season-opt-summer, season-opt-winter), tapping 'Été' shows 'Saison mise à jour' toast and 'En cours' badge appears on the active card. Product edit form on Pommes Gala exposes all 7 required testIDs (edit-price-kg, edit-price-piece, edit-price-kg-ttc, edit-price-piece-ttc, season-all, season-summer, season-winter) plus 'Prix HT (Pros)', 'Prix TTC (Particuliers)', 'Saison' section labels — filling TTC kg=3.30, selecting 'Été', saving fires 'Produit mis à jour' toast, and re-opening the same product shows 3.3 persisted. Business login (test@leray.fr): catalog shows 'X.XX € HT / kg', product detail shows 'Sous-total HT' (no TTC label). Personal login (perso+ttctest@leray.fr, created via /auth/register-personal): catalog shows 'X.XX € TTC / kg', product detail shows 'Sous-total TTC' (no HT label). Seasonal filtering visible to clients: with global season=winter, created summer product hidden from GET /api/products (15 items) — with season=summer it reappears (16 items) — confirmed at API level; personal client under winter still sees 15 season='all' products. Cleanup: test melons deleted, season reset to 'all'. Deprecated packages/RN issues: pre-existing pointerEvents deprecation warning on toast (carried from iter 3-5) — no new ones.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: /app/frontend/src/toast.tsx:38"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_season_httc.py",
+    "/app/test_reports/pytest/iter6_results.xml",
+    "/app/test_reports/iteration_6.json"
+  ],
+  "action_items": [
+    "Optional: move pointerEvents='none' from prop to style in /app/frontend/src/toast.tsx to silence the RN deprecation warning (pre-existing, non-blocking)."
+  ],
+  "critical_code_review_comments": [
+    "server.py `SeasonIn` correctly validates season∈{'summer','winter','all'} via field_validator → 422 on invalid; `_get_current_season()` safely falls back to 'all' if the settings doc is missing.",
+    "server.py `/settings/season` is intentionally public (no Depends) — appropriate since it's needed by the auth screen and public catalog listing.",
+    "server.py `/admin/settings/season` is admin-guarded via Depends(require_admin) → 403 for non-admin, 401 for no token. Verified.",
+    "server.py `list_products` correctly applies `q['season'] = {'$in': ['all', current]}` only when current != 'all', so season='all' returns everything (correct global toggle behavior).",
+    "server.py `ProductIn` extends validator to include price_kg_ttc / price_piece_ttc (>0 or null) and season enum; `resolved()` still requires at least one of price_kg/price_piece (HT) which correctly enforces the pro-price as the source of truth for cart pricing. TTC fields are pure display overrides.",
+    "server.py startup migration back-fills season='all' and price_kg_ttc/price_piece_ttc=null on legacy docs — verified by test_11 and test_12.",
+    "cart-context.tsx `priceForTtc` falls back to `priceForHt` when TTC price is not filled — good defensive default so partially-migrated products don't blank out for personal users.",
+    "cart-context.tsx `priceModeFor(user)` returns 'ttc' only when account_type==='personal' — admin and business both see HT, as specified.",
+    "product-edit.tsx exposes correct testIDs for both HT and TTC blocks and 3 season chips; season chip visual state (active pill) correctly persists across re-open (verified 3.3 persistence).",
+    "product-detail.tsx displays 'Sous-total HT' / 'Sous-total TTC' via priceLabelFor(mode) — dynamically follows the logged-in user account_type.",
+    "(admin)/index.tsx dashboard adds nav-season row alongside pending/banner/orders/products — no layout regression observed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_season_httc.py (new — 12 pytest cases)"
+  ],
+  "success_rate": {"backend": "100% (12/12 iter6 tests)", "frontend": "100% (Season screen 3 options + toast/badge; product-edit HT+TTC+3 season chips + persistence; business HT catalog+detail; personal TTC catalog+detail; season filter hides/shows summer melon under winter/summer via API)"},
+  "seed_data_creation": "Personal user perso+ttctest@leray.fr / Test1234! created via /api/auth/register-personal for TTC testing (kept — matches naming from iter 5 context, useful for future regression). All TEST products created during backend/API testing were deleted at end of each test. Global season reset to 'all' at end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login testIDs are `login-email-input`, `login-password-input`, `login-submit-button` (not `-email`/`-password`/`-submit`). Tabs: tab-company / tab-personal / tab-supplier. Admin dashboard testIDs: nav-orders, nav-products, nav-pending, nav-season, nav-banner, nav-export, admin-logout. Season screen testIDs: season-opt-all / season-opt-summer / season-opt-winter, back-btn. Product-edit testIDs (new this iter): edit-price-kg, edit-price-piece, edit-price-kg-ttc, edit-price-piece-ttc, season-all, season-summer, season-winter, save-product-btn. Product list edit buttons follow pattern edit-{uuid}. Client catalog price line renders 'X.XX € HT / kg' for business/admin, 'X.XX € TTC / kg' for personal (perso+ttctest@leray.fr / Test1234!). Product detail Sous-total label follows priceLabelFor(mode). Global season toggle at `PUT /api/admin/settings/season` (admin) and `GET /api/settings/season` (public). Seed products all have season='all'. To test seasonal hiding on the client UI you must first CREATE a summer or winter product via admin — seed data will not disappear regardless of the toggle.",
+  "rca_of_issue": "N/A — feature verification only. All acceptance criteria in the review request met against the running backend and Expo web preview."
+}

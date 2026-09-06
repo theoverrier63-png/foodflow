@@ -112,10 +112,13 @@ class Product(BaseModel):
     category: str
     origin: str
     unit: str
-    sell_unit: str = "piece"  # default unit for quick-add
+    sell_unit: str = "piece"
     price: float
     price_kg: Optional[float] = None
     price_piece: Optional[float] = None
+    price_kg_ttc: Optional[float] = None
+    price_piece_ttc: Optional[float] = None
+    season: str = "all"  # "summer" | "winter" | "all"
     image_url: str
     description: str
 
@@ -302,6 +305,26 @@ async def startup():
         if set_fields:
             await db.products.update_one({"id": p["id"]}, {"$set": set_fields})
 
+    # Migrate: default season to "all" for legacy products
+    await db.products.update_many(
+        {"season": {"$exists": False}},
+        {"$set": {"season": "all"}},
+    )
+    # Migrate: default TTC prices to None for legacy products
+    await db.products.update_many(
+        {"price_kg_ttc": {"$exists": False}},
+        {"$set": {"price_kg_ttc": None}},
+    )
+    await db.products.update_many(
+        {"price_piece_ttc": {"$exists": False}},
+        {"$set": {"price_piece_ttc": None}},
+    )
+
+    # Seed default global season setting
+    existing_season = await db.settings.find_one({"key": "current_season"})
+    if not existing_season:
+        await db.settings.insert_one({"key": "current_season", "value": "all"})
+
     # Seed default supplier (admin) account — only Leray-Pointel has admin access.
     admin_email = "sarl.leraypointel@orange.fr"
     admin_password = "Loic76930@"
@@ -412,8 +435,17 @@ async def list_products(category: Optional[str] = None):
     q = {}
     if category and category.lower() != "tous":
         q["category"] = category
+    # Filter by current season: always keep "all" + current active season
+    current = await _get_current_season()
+    if current != "all":
+        q["season"] = {"$in": ["all", current]}
     docs = await db.products.find(q, {"_id": 0}).to_list(500)
     return docs
+
+
+async def _get_current_season() -> str:
+    doc = await db.settings.find_one({"key": "current_season"}, {"_id": 0})
+    return (doc or {}).get("value", "all")
 
 
 @api.get("/products/categories")
@@ -480,19 +512,27 @@ class ProductIn(BaseModel):
     unit: str = Field(min_length=1, max_length=100)
     price_kg: Optional[float] = Field(default=None, gt=0)
     price_piece: Optional[float] = Field(default=None, gt=0)
-    image_url: str = Field(min_length=1, max_length=1000)
+    price_kg_ttc: Optional[float] = Field(default=None, gt=0)
+    price_piece_ttc: Optional[float] = Field(default=None, gt=0)
+    season: str = Field(default="all")
+    image_url: str = Field(min_length=1, max_length=5_000_000)
     description: str = Field(default="", max_length=1000)
 
-    @field_validator("price_kg", "price_piece")
+    @field_validator("season")
+    @classmethod
+    def check_season(cls, v):
+        if v not in ("summer", "winter", "all"):
+            raise ValueError("season doit être 'summer', 'winter' ou 'all'")
+        return v
+
+    @field_validator("price_kg", "price_piece", "price_kg_ttc", "price_piece_ttc")
     @classmethod
     def norm_prices(cls, v):
         return None if v in (0, 0.0) else v
 
     def resolved(self) -> dict:
-        """Return the persistable dict with derived sell_unit and price."""
         if self.price_kg is None and self.price_piece is None:
-            raise HTTPException(422, "Au moins un prix (au kilo ou à la pièce) est requis")
-        # Default: prefer kg when both provided
+            raise HTTPException(422, "Au moins un prix HT (au kilo ou à la pièce) est requis")
         sell_unit = "kg" if self.price_kg is not None else "piece"
         price = self.price_kg if sell_unit == "kg" else self.price_piece
         return {
@@ -504,6 +544,9 @@ class ProductIn(BaseModel):
             "price": price,
             "price_kg": self.price_kg,
             "price_piece": self.price_piece,
+            "price_kg_ttc": self.price_kg_ttc,
+            "price_piece_ttc": self.price_piece_ttc,
+            "season": self.season,
             "image_url": self.image_url.strip(),
             "description": self.description or "",
         }
@@ -810,6 +853,34 @@ async def admin_reject(user_id: str, _: dict = Depends(require_admin)):
     if not doc:
         raise HTTPException(404, "Compte introuvable")
     return user_public(doc)
+
+
+# ---- Global settings (season) ----
+
+class SeasonIn(BaseModel):
+    season: str
+
+    @field_validator("season")
+    @classmethod
+    def check_season(cls, v):
+        if v not in ("summer", "winter", "all"):
+            raise ValueError("season doit être 'summer', 'winter' ou 'all'")
+        return v
+
+
+@api.get("/settings/season")
+async def get_current_season():
+    return {"season": await _get_current_season()}
+
+
+@api.put("/admin/settings/season")
+async def set_current_season(body: SeasonIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "current_season"},
+        {"$set": {"key": "current_season", "value": body.season}},
+        upsert=True,
+    )
+    return {"season": body.season}
 
 
 # ---- Banner ----
