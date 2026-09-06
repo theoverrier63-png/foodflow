@@ -136,6 +136,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<User>("/auth/me"),
+  deleteMe: () => request<void>("/auth/me", { method: "DELETE" }),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
   getProduct: (id: string) => request<Product>(`/products/${id}`),

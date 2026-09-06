@@ -9,14 +9,22 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.foodflow.qaug8m"
+      "bundleIdentifier": "com.emergent.foodflow.qaug8m",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Importer des photos de produits et de bannières.",
+        "NSPhotoLibraryAddUsageDescription": "Enregistrer les factures dans votre galerie.",
+        "NSCameraUsageDescription": "Prendre une photo d'un produit à ajouter au catalogue."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.foodflow.qaug8m"
+      "package": "com.emergent.foodflow.qaug8m",
+      "permissions": [
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -40,7 +48,14 @@
       "expo-web-browser",
       "expo-status-bar",
       "@react-native-vector-icons/feather",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Importer des photos de produits et de bannières.",
+          "cameraPermission": "Prendre une photo d'un produit à ajouter au catalogue."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

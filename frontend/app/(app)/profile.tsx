@@ -1,7 +1,16 @@
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Modal,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@react-native-vector-icons/feather";
 
+import { api } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { useCart } from "@/src/cart-context";
@@ -14,11 +23,28 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const { clear } = useCart();
   const toast = useToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function logout() {
     clear();
     await signOut();
     toast.show("Déconnecté", "info");
+  }
+
+  async function deleteAccount() {
+    try {
+      setDeleting(true);
+      await api.deleteMe();
+      clear();
+      await signOut();
+      toast.show("Compte supprimé", "info");
+    } catch (e: any) {
+      toast.show(e?.message || "Suppression impossible", "error");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
   }
 
   const initials = (user?.company_name || "?")
@@ -76,7 +102,66 @@ export default function Profile() {
           <Feather name="log-out" size={18} color={colors.error} />
           <Text style={styles.logoutTxt}>Se déconnecter</Text>
         </Pressable>
+
+        {user?.role !== "admin" ? (
+          <Pressable
+            testID="delete-account-button"
+            onPress={() => setConfirmDelete(true)}
+            style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Feather name="trash-2" size={16} color={colors.muted} />
+            <Text style={styles.deleteBtnTxt}>Supprimer mon compte</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
+
+      <Modal
+        visible={confirmDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setConfirmDelete(false)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => !deleting && setConfirmDelete(false)}
+        >
+          <Pressable style={styles.dialog} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.dangerIcon}>
+              <Feather name="alert-triangle" size={22} color={colors.error} />
+            </View>
+            <Text style={styles.dialogTitle}>Supprimer votre compte ?</Text>
+            <Text style={styles.dialogSub}>
+              Cette action est définitive. Votre historique restera visible côté
+              Leray-Pointel, mais votre profil sera effacé.
+            </Text>
+            <View style={styles.dialogActions}>
+              <Pressable
+                onPress={() => !deleting && setConfirmDelete(false)}
+                disabled={deleting}
+                style={[styles.dialogBtn, { backgroundColor: colors.surfaceTertiary }]}
+              >
+                <Text style={[styles.dialogBtnTxt, { color: colors.onSurface }]}>
+                  Annuler
+                </Text>
+              </Pressable>
+              <Pressable
+                testID="confirm-delete-account"
+                disabled={deleting}
+                onPress={deleteAccount}
+                style={[styles.dialogBtn, { backgroundColor: colors.error }]}
+              >
+                {deleting ? (
+                  <ActivityIndicator color={colors.onError} />
+                ) : (
+                  <Text style={[styles.dialogBtnTxt, { color: colors.onError }]}>
+                    Supprimer
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -187,4 +272,53 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 8,
   },
   logoutTxt: { color: colors.error, fontWeight: "700", fontSize: 15 },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  deleteBtnTxt: { color: colors.muted, fontSize: 13, fontWeight: "600" },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  dialog: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+    gap: 8,
+  },
+  dangerIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(220,38,38,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  dialogTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
+  dialogSub: {
+    fontSize: 13,
+    color: colors.muted,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  dialogActions: { flexDirection: "row", gap: 10, marginTop: 12, width: "100%" },
+  dialogBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  dialogBtnTxt: { fontSize: 14, fontWeight: "700" },
 }));

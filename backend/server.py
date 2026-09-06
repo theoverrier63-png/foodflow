@@ -287,17 +287,18 @@ async def startup():
         {"$set": {"account_type": "business", "status": "approved"}},
     )
 
-    # Seed products — re-seed if the DB is empty OR if products are missing
-    # the new sell_unit field (backward-compatible migration).
+    # Seed products — only if DB is empty. Never destructively delete existing catalog.
     total = await db.products.count_documents({})
-    legacy = await db.products.count_documents({"sell_unit": {"$exists": False}})
-    if total == 0 or legacy > 0:
-        await db.products.delete_many({})
+    if total == 0:
         docs = [{"id": str(uuid.uuid4()), **p} for p in SEED_PRODUCTS]
         await db.products.insert_many(docs)
-        logger.info(f"Seeded {len(docs)} products with sell_unit")
+        logger.info(f"Seeded {len(docs)} initial products")
 
-    # Migrate to dual pricing: fill price_kg/price_piece from legacy price+sell_unit
+    # Idempotent migration: fill missing legacy fields on any pre-existing product.
+    await db.products.update_many(
+        {"sell_unit": {"$exists": False}},
+        {"$set": {"sell_unit": "piece"}},
+    )
     async for p in db.products.find({"$or": [{"price_kg": {"$exists": False}}, {"price_piece": {"$exists": False}}]}):
         set_fields = {}
         if "price_kg" not in p:
@@ -336,38 +337,37 @@ async def startup():
     if not existing_season:
         await db.settings.insert_one({"key": "current_season", "value": "all"})
 
-    # Seed default supplier (admin) account — only Leray-Pointel has admin access.
-    admin_email = "sarl.leraypointel@orange.fr"
-    admin_password = "Loic76930@"
-    # Lock supplier space to Leray-Pointel: remove any stray/legacy admin accounts.
-    await db.users.delete_many({"role": "admin", "email": {"$ne": admin_email}})
+    # Seed default supplier (admin) account — only if not yet present.
+    # Credentials come from env (ADMIN_EMAIL / ADMIN_PASSWORD) with safe defaults.
+    admin_email = os.environ.get("ADMIN_EMAIL", "sarl.leraypointel@orange.fr").strip().lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
     admin = await db.users.find_one({"email": admin_email})
     if not admin:
-        try:
-            await db.users.insert_one({
-                "id": str(uuid.uuid4()),
-                "company_name": "SARL Leray-Pointel",
-                "siret": "00000000000000",
-                "email": admin_email,
-                "phone": "+33100000000",
-                "delivery_address": "Siège Leray-Pointel",
-                "password_hash": hash_password(admin_password),
-                "role": "admin",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-            logger.info(f"Seeded supplier account {admin_email}")
-        except DuplicateKeyError:
-            pass
-    else:
-        # Keep the seeded password aligned on every start
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {
-                "password_hash": hash_password(admin_password),
-                "company_name": "SARL Leray-Pointel",
-                "role": "admin",
-            }},
-        )
+        # Only auto-create when a password is provided. In production, the admin
+        # is expected to be provisioned once and then manage credentials in-app.
+        if admin_password:
+            try:
+                await db.users.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "company_name": os.environ.get("ADMIN_COMPANY_NAME", "SARL Leray-Pointel"),
+                    "siret": "00000000000000",
+                    "email": admin_email,
+                    "phone": "+33100000000",
+                    "delivery_address": os.environ.get("ADMIN_ADDRESS", "Siège Leray-Pointel"),
+                    "password_hash": hash_password(admin_password),
+                    "role": "admin",
+                    "account_type": "business",
+                    "status": "approved",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                logger.info(f"Seeded supplier account {admin_email}")
+            except DuplicateKeyError:
+                pass
+        else:
+            logger.warning(
+                "No admin account found and ADMIN_PASSWORD env var is not set — "
+                "skipping admin seeding. Set ADMIN_EMAIL/ADMIN_PASSWORD to bootstrap."
+            )
 
 
 @app.on_event("shutdown")
@@ -439,6 +439,20 @@ async def login(body: LoginIn):
 @api.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(current_user)):
     return user_public(user)
+
+
+@api.delete("/auth/me", status_code=204)
+async def delete_me(user: dict = Depends(current_user)):
+    """Authenticated account deletion. Admin accounts cannot be deleted this way."""
+    if user.get("role") == "admin":
+        raise HTTPException(403, "Le compte administrateur ne peut pas être supprimé depuis l'application.")
+    # Anonymize past orders so history stays valid but personal info is wiped.
+    await db.orders.update_many(
+        {"user_id": user["id"]},
+        {"$set": {"company_name": "Compte supprimé", "delivery_address": "—"}},
+    )
+    await db.users.delete_one({"id": user["id"]})
+    return None
 
 
 @api.get("/products", response_model=List[Product])
