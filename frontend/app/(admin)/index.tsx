@@ -168,6 +168,27 @@ export default function AdminDashboard() {
           onPress={() => router.push("/(admin)/banner")}
         />
         <ActionRow
+          testID="nav-login-cover"
+          icon="camera"
+          title="Photo de connexion"
+          subtitle="Image affichée en haut de l'écran de connexion des clients"
+          onPress={() => router.push("/(admin)/login-cover")}
+        />
+        <ActionRow
+          testID="nav-watermark"
+          icon="droplet"
+          title="Filigrane catalogue"
+          subtitle="Filigrane discret affiché derrière la liste des produits"
+          onPress={() => router.push("/(admin)/watermark")}
+        />
+        <ActionRow
+          testID="nav-our-story"
+          icon="book-open"
+          title="Notre histoire"
+          subtitle="Texte et photos affichés sur la page « Notre histoire »"
+          onPress={() => router.push("/(admin)/our-story")}
+        />
+        <ActionRow
           testID="nav-export"
           icon="download"
           title="Exporter toutes les commandes"

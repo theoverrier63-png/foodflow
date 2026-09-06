@@ -49,3 +49,11 @@ CSV downloads: web = blob + anchor; native = share sheet. Backend adds `role` fi
 - Each product has a **season** field: `summer`, `winter`, or `all`.
 - Global setting `current_season` (default `all`) — admin toggles it manually via the "Saison en cours" screen. Products marked with the off-season are hidden from the client catalog automatically.
 - New endpoints: `GET /api/settings/season` (public), `PUT /api/admin/settings/season` (admin only).
+
+## Order Habits, Cagette Unit, Custom Screens (v4)
+- **Habitudes de commande** — approved Pros see a "Vos habitudes de commande" horizontal row on top of the catalog, listing the products they order most (`GET /api/orders/habits`). Hidden on search, other categories, personal / pending users.
+- **Cagette unit** — third sales option per product. Admin defines the content (either N pieces or X kg). Cagette price is auto-computed (content × unit price) in HT or TTC. New fields `cagette_content_pieces`, `cagette_content_kg` on products.
+- **Login cover image** — admin uploads the hero photo of the login screen (`GET /api/login-cover` public, `PUT/DELETE /api/admin/login-cover`).
+- **Catalog watermark** — subtle logo (opacity 0.06) centered behind the catalog list. Fully touch-transparent. Endpoints: `GET /api/watermark` public + admin PUT/DELETE.
+- **Notre histoire** — editable "about" page (title + body + up to 4 photos) reachable from the catalog header. Endpoints: `GET /api/our-story` public + `PUT /api/admin/our-story`.
+

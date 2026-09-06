@@ -1,15 +1,18 @@
-// Display + parsing helpers for the "kg" or "piece" sell unit.
+// Display + parsing helpers for the "kg" / "piece" / "cagette" sell unit.
 
-export type SellUnit = "kg" | "piece";
+export type SellUnit = "kg" | "piece" | "cagette";
 
 export function unitLabel(sellUnit: SellUnit, quantity = 1): string {
   if (sellUnit === "kg") return "kg";
+  if (sellUnit === "cagette") return quantity > 1 ? "cagettes" : "cagette";
   return quantity > 1 ? "pièces" : "pièce";
 }
 
 // Short version used in tight spots (cart / catalog price line).
 export function unitShort(sellUnit: SellUnit): string {
-  return sellUnit === "kg" ? "kg" : "pce";
+  if (sellUnit === "kg") return "kg";
+  if (sellUnit === "cagette") return "cag.";
+  return "pce";
 }
 
 // Format a number as a French-locale quantity like "2,5" or "3".
@@ -34,6 +37,7 @@ export function stepFor(sellUnit: SellUnit): number {
 
 // Round to a sane precision for the unit.
 export function roundQty(q: number, sellUnit: SellUnit): number {
-  if (sellUnit === "piece") return Math.max(0, Math.round(q));
-  return Math.max(0, Math.round(q * 100) / 100);
+  if (sellUnit === "kg") return Math.max(0, Math.round(q * 100) / 100);
+  // piece + cagette are integer quantities
+  return Math.max(0, Math.round(q));
 }

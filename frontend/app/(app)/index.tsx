@@ -39,6 +39,7 @@ export default function Catalog() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [watermark, setWatermark] = useState<string | null>(null);
 
   const showHabits =
     user?.account_type === "business" &&
@@ -52,16 +53,18 @@ export default function Catalog() {
       setError(null);
       const canFetchHabits =
         user?.account_type === "business" && user?.status === "approved";
-      const [cs, ps, bn, hs] = await Promise.all([
+      const [cs, ps, bn, hs, wm] = await Promise.all([
         api.categories(),
         api.products(),
         api.getBanner().catch(() => ({ image_url: null })),
         canFetchHabits ? api.orderHabits(8).catch(() => []) : Promise.resolve([]),
+        api.getWatermark().catch(() => ({ image_url: null })),
       ]);
       setCats(cs.categories);
       setProducts(ps);
       setBanner(bn.image_url);
       setHabits(hs);
+      setWatermark(wm.image_url);
     } catch (e: any) {
       setError(e?.message || "Erreur");
     } finally {
@@ -103,8 +106,18 @@ export default function Catalog() {
               {user?.company_name || "Entreprise"}
             </Text>
           </View>
-          <View style={styles.logo}>
-            <Feather name="shopping-bag" size={20} color={colors.onBrandPrimary} />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              testID="open-our-story"
+              onPress={() => router.push("/(app)/our-story")}
+              hitSlop={8}
+              style={styles.storyBtn}
+            >
+              <Feather name="book-open" size={16} color={colors.brandPrimary} />
+            </Pressable>
+            <View style={styles.logo}>
+              <Feather name="shopping-bag" size={20} color={colors.onBrandPrimary} />
+            </View>
           </View>
         </View>
 
@@ -172,21 +185,31 @@ export default function Catalog() {
           </Pressable>
         </View>
       ) : (
-        <FlatList
-          testID="products-list"
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 12 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
-              tintColor={colors.brandPrimary}
-            />
-          }
+        <View style={{ flex: 1 }}>
+          {watermark ? (
+            <View pointerEvents="none" style={styles.watermarkWrap}>
+              <Image
+                source={{ uri: watermark }}
+                style={styles.watermarkImg}
+                contentFit="contain"
+              />
+            </View>
+          ) : null}
+          <FlatList
+            testID="products-list"
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 12 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  load();
+                }}
+                tintColor={colors.brandPrimary}
+              />
+            }
           ListHeaderComponent={
             <View>
               {banner ? (
@@ -275,26 +298,27 @@ export default function Catalog() {
               ) : null}
             </View>
           }
-          renderItem={({ item }) => (
-            <ProductRow
-              product={item}
-              priceMode={priceModeFor(user)}
-              onOpen={() =>
-                router.push({
-                  pathname: "/(app)/product-detail",
-                  params: { id: item.id },
-                })
-              }
-              onAdd={(q) => {
-                add(item, q, undefined, priceModeFor(user));
-                toast.show(
-                  `${item.name} ajouté (${formatQty(q)} ${unitShort(item.sell_unit)})`,
-                  "success"
-                );
-              }}
-            />
-          )}
-        />
+            renderItem={({ item }) => (
+              <ProductRow
+                product={item}
+                priceMode={priceModeFor(user)}
+                onOpen={() =>
+                  router.push({
+                    pathname: "/(app)/product-detail",
+                    params: { id: item.id },
+                  })
+                }
+                onAdd={(q) => {
+                  add(item, q, undefined, priceModeFor(user));
+                  toast.show(
+                    `${item.name} ajouté (${formatQty(q)} ${unitShort(item.sell_unit)})`,
+                    "success"
+                  );
+                }}
+              />
+            )}
+          />
+        </View>
       )}
     </View>
   );
@@ -407,6 +431,16 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  storyBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.brandSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -513,6 +547,20 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.divider,
     marginTop: 12,
     marginBottom: 4,
+  },
+  watermarkWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.06,
+  },
+  watermarkImg: {
+    width: "70%",
+    height: "70%",
   },
   cardTapArea: {
     flexDirection: "row",

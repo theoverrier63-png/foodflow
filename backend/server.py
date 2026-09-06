@@ -118,6 +118,8 @@ class Product(BaseModel):
     price_piece: Optional[float] = None
     price_kg_ttc: Optional[float] = None
     price_piece_ttc: Optional[float] = None
+    cagette_content_pieces: Optional[int] = None
+    cagette_content_kg: Optional[float] = None
     season: str = "all"  # "summer" | "winter" | "all"
     image_url: str
     description: str
@@ -318,6 +320,15 @@ async def startup():
     await db.products.update_many(
         {"price_piece_ttc": {"$exists": False}},
         {"$set": {"price_piece_ttc": None}},
+    )
+    # Cagette content migration (default None)
+    await db.products.update_many(
+        {"cagette_content_pieces": {"$exists": False}},
+        {"$set": {"cagette_content_pieces": None}},
+    )
+    await db.products.update_many(
+        {"cagette_content_kg": {"$exists": False}},
+        {"$set": {"cagette_content_kg": None}},
     )
 
     # Seed default global season setting
@@ -545,6 +556,8 @@ class ProductIn(BaseModel):
     price_piece: Optional[float] = Field(default=None, gt=0)
     price_kg_ttc: Optional[float] = Field(default=None, gt=0)
     price_piece_ttc: Optional[float] = Field(default=None, gt=0)
+    cagette_content_pieces: Optional[int] = Field(default=None, gt=0)
+    cagette_content_kg: Optional[float] = Field(default=None, gt=0)
     season: str = Field(default="all")
     image_url: str = Field(min_length=1, max_length=5_000_000)
     description: str = Field(default="", max_length=1000)
@@ -556,14 +569,26 @@ class ProductIn(BaseModel):
             raise ValueError("season doit être 'summer', 'winter' ou 'all'")
         return v
 
-    @field_validator("price_kg", "price_piece", "price_kg_ttc", "price_piece_ttc")
+    @field_validator("price_kg", "price_piece", "price_kg_ttc", "price_piece_ttc", "cagette_content_kg")
     @classmethod
     def norm_prices(cls, v):
         return None if v in (0, 0.0) else v
 
+    @field_validator("cagette_content_pieces")
+    @classmethod
+    def norm_pieces(cls, v):
+        return None if v in (0,) else v
+
     def resolved(self) -> dict:
         if self.price_kg is None and self.price_piece is None:
             raise HTTPException(422, "Au moins un prix HT (au kilo ou à la pièce) est requis")
+        # Cagette must reference an actual base price it can compute from
+        if self.cagette_content_pieces is not None and self.price_piece is None:
+            raise HTTPException(422, "Prix à la pièce requis pour vendre en cagette (nombre de pièces)")
+        if self.cagette_content_kg is not None and self.price_kg is None:
+            raise HTTPException(422, "Prix au kilo requis pour vendre en cagette (poids)")
+        if self.cagette_content_pieces is not None and self.cagette_content_kg is not None:
+            raise HTTPException(422, "La cagette doit être définie en pièces OU en kg, pas les deux")
         sell_unit = "kg" if self.price_kg is not None else "piece"
         price = self.price_kg if sell_unit == "kg" else self.price_piece
         return {
@@ -577,6 +602,8 @@ class ProductIn(BaseModel):
             "price_piece": self.price_piece,
             "price_kg_ttc": self.price_kg_ttc,
             "price_piece_ttc": self.price_piece_ttc,
+            "cagette_content_pieces": self.cagette_content_pieces,
+            "cagette_content_kg": self.cagette_content_kg,
             "season": self.season,
             "image_url": self.image_url.strip(),
             "description": self.description or "",
@@ -768,7 +795,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     items_data = [["Produit", "Format", "Qté", "PU HT (€)", "Total HT (€)"]]
     for it in order["items"]:
         sell_unit = it.get("sell_unit", "piece")
-        unit_label = "kg" if sell_unit == "kg" else "pce"
+        unit_label = "kg" if sell_unit == "kg" else "cag." if sell_unit == "cagette" else "pce"
         # Format quantity: integer without trailing .0, else 2 decimals
         q = it["quantity"]
         q_str = f"{q:.2f}".rstrip("0").rstrip(".") if isinstance(q, float) else str(q)
@@ -940,6 +967,105 @@ async def set_banner(body: BannerIn, _: dict = Depends(require_admin)):
 async def delete_banner(_: dict = Depends(require_admin)):
     await db.settings.delete_one({"key": "banner"})
     return None
+
+
+# ---- Login cover image ----
+
+class ImageIn(BaseModel):
+    image_url: str = Field(min_length=1, max_length=5_000_000)
+
+
+@api.get("/login-cover")
+async def get_login_cover():
+    doc = await db.settings.find_one({"key": "login_cover"}, {"_id": 0})
+    return {"image_url": doc.get("image_url") if doc else None}
+
+
+@api.put("/admin/login-cover")
+async def set_login_cover(body: ImageIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "login_cover"},
+        {"$set": {"key": "login_cover", "image_url": body.image_url}},
+        upsert=True,
+    )
+    return {"image_url": body.image_url}
+
+
+@api.delete("/admin/login-cover", status_code=204)
+async def delete_login_cover(_: dict = Depends(require_admin)):
+    await db.settings.delete_one({"key": "login_cover"})
+    return None
+
+
+# ---- Catalog watermark ----
+
+@api.get("/watermark")
+async def get_watermark():
+    doc = await db.settings.find_one({"key": "watermark"}, {"_id": 0})
+    return {"image_url": doc.get("image_url") if doc else None}
+
+
+@api.put("/admin/watermark")
+async def set_watermark(body: ImageIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "watermark"},
+        {"$set": {"key": "watermark", "image_url": body.image_url}},
+        upsert=True,
+    )
+    return {"image_url": body.image_url}
+
+
+@api.delete("/admin/watermark", status_code=204)
+async def delete_watermark(_: dict = Depends(require_admin)):
+    await db.settings.delete_one({"key": "watermark"})
+    return None
+
+
+# ---- Our Story page (about) ----
+
+DEFAULT_STORY = {
+    "title": "Notre histoire",
+    "body": (
+        "Depuis plusieurs générations, la SARL Leray-Pointel sélectionne chaque jour "
+        "les meilleurs fruits et légumes pour les professionnels de la restauration et "
+        "les particuliers de la région. Une équipe passionnée, des producteurs de "
+        "confiance et une exigence de fraîcheur qui ne se négocie pas."
+    ),
+    "images": [],
+}
+
+
+class StoryIn(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=8000)
+    images: List[str] = Field(default_factory=list, max_length=4)
+
+
+@api.get("/our-story")
+async def get_our_story():
+    doc = await db.settings.find_one({"key": "our_story"}, {"_id": 0})
+    if not doc:
+        return DEFAULT_STORY
+    return {
+        "title": doc.get("title") or DEFAULT_STORY["title"],
+        "body": doc.get("body") or DEFAULT_STORY["body"],
+        "images": doc.get("images") or [],
+    }
+
+
+@api.put("/admin/our-story")
+async def set_our_story(body: StoryIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"key": "our_story"},
+        {"$set": {
+            "key": "our_story",
+            "title": body.title.strip(),
+            "body": body.body.strip(),
+            "images": body.images,
+        }},
+        upsert=True,
+    )
+    return {"title": body.title, "body": body.body, "images": body.images}
 
 
 app.include_router(api)

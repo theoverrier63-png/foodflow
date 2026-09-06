@@ -62,6 +62,8 @@ export default function ProductEdit() {
   const [pricePieceStr, setPricePieceStr] = useState("");
   const [priceKgTtcStr, setPriceKgTtcStr] = useState("");
   const [pricePieceTtcStr, setPricePieceTtcStr] = useState("");
+  const [cagetteMode, setCagetteMode] = useState<"none" | "pieces" | "kg">("none");
+  const [cagetteContentStr, setCagetteContentStr] = useState("");
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
 
@@ -89,6 +91,16 @@ export default function ProductEdit() {
         setPricePieceStr(p.price_piece != null ? String(p.price_piece) : "");
         setPriceKgTtcStr(p.price_kg_ttc != null ? String(p.price_kg_ttc) : "");
         setPricePieceTtcStr(p.price_piece_ttc != null ? String(p.price_piece_ttc) : "");
+        if (p.cagette_content_pieces != null && p.cagette_content_pieces > 0) {
+          setCagetteMode("pieces");
+          setCagetteContentStr(String(p.cagette_content_pieces));
+        } else if (p.cagette_content_kg != null && p.cagette_content_kg > 0) {
+          setCagetteMode("kg");
+          setCagetteContentStr(String(p.cagette_content_kg));
+        } else {
+          setCagetteMode("none");
+          setCagetteContentStr("");
+        }
       } catch (e: any) {
         toast.show(e?.message || "Erreur", "error");
       } finally {
@@ -116,12 +128,39 @@ export default function ProductEdit() {
     if (priceKg == null && pricePiece == null)
       return toast.show("Saisissez au moins un prix HT (kg ou pièce)", "error");
     if (!form.image_url.trim()) return toast.show("Image requise", "error");
+
+    let cagette_content_pieces: number | undefined;
+    let cagette_content_kg: number | undefined;
+    if (cagetteMode === "pieces") {
+      const n = parseInt(cagetteContentStr.trim(), 10);
+      if (!Number.isFinite(n) || n <= 0)
+        return toast.show("Nombre de pièces par cagette invalide", "error");
+      if (pricePiece == null)
+        return toast.show(
+          "Renseignez le prix HT à la pièce pour vendre en cagette",
+          "error",
+        );
+      cagette_content_pieces = n;
+    } else if (cagetteMode === "kg") {
+      const n = parsePrice(cagetteContentStr);
+      if (n == null)
+        return toast.show("Poids par cagette invalide", "error");
+      if (priceKg == null)
+        return toast.show(
+          "Renseignez le prix HT au kilo pour vendre en cagette",
+          "error",
+        );
+      cagette_content_kg = n;
+    }
+
     const payload = {
       ...form,
       price_kg: priceKg ?? undefined,
       price_piece: pricePiece ?? undefined,
       price_kg_ttc: priceKgTtc ?? undefined,
       price_piece_ttc: pricePieceTtc ?? undefined,
+      cagette_content_pieces,
+      cagette_content_kg,
     };
     try {
       setSaving(true);
@@ -311,6 +350,71 @@ export default function ProductEdit() {
               />
             </View>
           </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Cagette (optionnel)</Text>
+          <Text style={styles.hint}>
+            Le prix cagette est calculé automatiquement à partir du contenu et du prix unitaire.
+          </Text>
+          <View style={styles.chipsRow}>
+            {(
+              [
+                { key: "none", label: "Non proposée", icon: "x" },
+                { key: "pieces", label: "En pièces", icon: "box" },
+                { key: "kg", label: "En kg", icon: "package" },
+              ] as const
+            ).map((opt) => {
+              const active = cagetteMode === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  testID={`cagette-mode-${opt.key}`}
+                  onPress={() => setCagetteMode(opt.key)}
+                  style={[
+                    styles.chip,
+                    { flexDirection: "row", gap: 6 },
+                    active
+                      ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                      : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                  ]}
+                >
+                  <Feather
+                    name={opt.icon as any}
+                    size={13}
+                    color={active ? colors.onBrandPrimary : colors.onSurface}
+                  />
+                  <Text
+                    style={{
+                      color: active ? colors.onBrandPrimary : colors.onSurface,
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {cagetteMode !== "none" ? (
+            <View style={[styles.field, { marginTop: 4, gap: 4 }]}>
+              <Text style={styles.subLabel}>
+                {cagetteMode === "pieces"
+                  ? "Nombre de pièces par cagette"
+                  : "Poids par cagette (kg)"}
+              </Text>
+              <TextInput
+                testID="edit-cagette-content"
+                value={cagetteContentStr}
+                onChangeText={setCagetteContentStr}
+                keyboardType={cagetteMode === "pieces" ? "number-pad" : "decimal-pad"}
+                placeholder={cagetteMode === "pieces" ? "Ex : 24" : "Ex : 5"}
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.field}>

@@ -65,6 +65,7 @@ export default function AppTabsLayout() {
         }}
       />
       <Tabs.Screen name="product-detail" options={{ href: null }} />
+      <Tabs.Screen name="our-story" options={{ href: null }} />
     </Tabs>
   );
 }

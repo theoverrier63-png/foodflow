@@ -17,7 +17,14 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { availableUnits, priceFor, priceLabelFor, priceModeFor, useCart } from "@/src/cart-context";
+import {
+  availableUnits,
+  cagetteContentLabel,
+  priceFor,
+  priceLabelFor,
+  priceModeFor,
+  useCart,
+} from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, roundQty, SellUnit, stepFor, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -79,8 +86,12 @@ export default function ProductDetail() {
 
   const chooseUnit = (u: SellUnit) => {
     if (!units.includes(u)) {
-      const other = u === "kg" ? "à la pièce" : "au kilo";
-      toast.show(`Ce produit est vendu ${other} uniquement`, "info");
+      const labels: Record<SellUnit, string> = {
+        kg: "au kilo",
+        piece: "à la pièce",
+        cagette: "à la cagette",
+      };
+      toast.show(`Ce produit est vendu ${labels[u]} uniquement`, "info");
       return;
     }
     setSelectedUnit(u);
@@ -152,6 +163,11 @@ export default function ProductDetail() {
               {price.toFixed(2)} € {priceLabel}
               <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
             </Text>
+          ) : selectedUnit === "cagette" ? (
+            <Text style={styles.price} testID="detail-price-cagette">
+              {price.toFixed(2)} € {priceLabel}
+              <Text style={styles.priceUnit}> / cagette</Text>
+            </Text>
           ) : (
             <Text style={styles.pricePiece} testID="detail-price-piece">
               Prix à la pièce sur devis
@@ -191,10 +207,65 @@ export default function ProductDetail() {
                 onPress={() => chooseUnit("piece")}
               />
             </View>
+            {units.includes("cagette") ? (
+              <Pressable
+                testID="unit-cagette"
+                onPress={() => chooseUnit("cagette")}
+                style={({ pressed }) => [
+                  styles.cagetteChip,
+                  selectedUnit === "cagette"
+                    ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                    : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                  <Feather
+                    name="archive"
+                    size={16}
+                    color={selectedUnit === "cagette" ? colors.onBrandPrimary : colors.onSurface}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.unitChipTxt,
+                        { color: selectedUnit === "cagette" ? colors.onBrandPrimary : colors.onSurface },
+                      ]}
+                    >
+                      À la cagette
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "600",
+                        marginTop: 2,
+                        color: selectedUnit === "cagette" ? colors.onBrandPrimary : colors.muted,
+                      }}
+                    >
+                      {cagetteContentLabel(product)}
+                    </Text>
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.unitChipPrice,
+                    { color: selectedUnit === "cagette" ? colors.onBrandPrimary : colors.onSurface },
+                  ]}
+                >
+                  {(priceFor(product, "cagette", priceMode) ?? 0).toFixed(2)} €
+                </Text>
+              </Pressable>
+            ) : null}
             <Text style={styles.unitHint}>
-              {units.length === 2
+              {units.length > 1
                 ? "Choisissez l'unité qui vous convient."
-                : `Ce produit est vendu ${selectedUnit === "kg" ? "au kilo" : "à la pièce"}.`}
+                : `Ce produit est vendu ${
+                    selectedUnit === "kg"
+                      ? "au kilo"
+                      : selectedUnit === "cagette"
+                      ? "à la cagette"
+                      : "à la pièce"
+                  }.`}
             </Text>
           </View>
 
@@ -231,7 +302,7 @@ export default function ProductDetail() {
                 <Feather name="plus" size={18} color={colors.onSurface} />
               </Pressable>
             </View>
-            {selectedUnit === "kg" ? (
+            {selectedUnit !== "piece" ? (
               <View style={styles.subtotal}>
                 <Text style={styles.subtotalLabel}>Sous-total {priceLabel}</Text>
                 <Text style={styles.subtotalVal} testID="detail-subtotal">
@@ -257,7 +328,7 @@ export default function ProductDetail() {
             <>
               <Feather name="shopping-cart" size={18} color={colors.onBrandPrimary} />
               <Text style={styles.ctaTxt}>
-                {selectedUnit === "kg"
+                {selectedUnit !== "piece"
                   ? `Ajouter au panier • ${lineTotal.toFixed(2)} €`
                   : "Ajouter au panier"}
               </Text>
@@ -386,6 +457,18 @@ const useStyles = makeStyles((colors) => ({
   },
 
   unitRow: { flexDirection: "row", gap: 10 },
+  cagetteChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minHeight: 56,
+    marginTop: 10,
+  },
   unitChip: {
     flex: 1,
     alignItems: "flex-start",

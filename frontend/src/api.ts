@@ -80,6 +80,8 @@ export type Product = {
   price_piece?: number | null;
   price_kg_ttc?: number | null;
   price_piece_ttc?: number | null;
+  cagette_content_pieces?: number | null;
+  cagette_content_kg?: number | null;
   season?: "summer" | "winter" | "all";
   image_url: string;
   description: string;
@@ -89,7 +91,7 @@ export type CartItem = {
   product_id: string;
   name: string;
   unit: string;
-  sell_unit: "kg" | "piece";
+  sell_unit: "kg" | "piece" | "cagette";
   price: number;
   quantity: number;
 };
@@ -175,6 +177,33 @@ export const api = {
       body: JSON.stringify({ image_url }),
     }),
   deleteBanner: () => request<void>("/admin/banner", { method: "DELETE" }),
+
+  // ============ Login cover image ============
+  getLoginCover: () => request<{ image_url: string | null }>("/login-cover"),
+  setLoginCover: (image_url: string) =>
+    request<{ image_url: string }>("/admin/login-cover", {
+      method: "PUT",
+      body: JSON.stringify({ image_url }),
+    }),
+  deleteLoginCover: () => request<void>("/admin/login-cover", { method: "DELETE" }),
+
+  // ============ Catalog watermark ============
+  getWatermark: () => request<{ image_url: string | null }>("/watermark"),
+  setWatermark: (image_url: string) =>
+    request<{ image_url: string }>("/admin/watermark", {
+      method: "PUT",
+      body: JSON.stringify({ image_url }),
+    }),
+  deleteWatermark: () => request<void>("/admin/watermark", { method: "DELETE" }),
+
+  // ============ Our Story ============
+  getOurStory: () =>
+    request<{ title: string; body: string; images: string[] }>("/our-story"),
+  setOurStory: (title: string, body: string, images: string[]) =>
+    request<{ title: string; body: string; images: string[] }>("/admin/our-story", {
+      method: "PUT",
+      body: JSON.stringify({ title, body, images }),
+    }),
 
   // ============ Season (global) ============
   getSeason: () => request<{ season: "summer" | "winter" | "all" }>("/settings/season"),

@@ -5,13 +5,41 @@ import { roundQty, stepFor, SellUnit } from "./units";
 // HT prices (used for pros = "business" & admin)
 export function priceForHt(product: Product, unit: SellUnit): number | null {
   if (unit === "kg") return product.price_kg ?? (product.sell_unit === "kg" ? product.price : null);
+  if (unit === "cagette") return cagettePrice(product, "ht");
   return product.price_piece ?? (product.sell_unit === "piece" ? product.price : null);
 }
 
 // TTC prices (used for personal buyers). Fallback silently to HT if not filled yet.
 export function priceForTtc(product: Product, unit: SellUnit): number | null {
   if (unit === "kg") return product.price_kg_ttc ?? priceForHt(product, unit);
+  if (unit === "cagette") return cagettePrice(product, "ttc") ?? cagettePrice(product, "ht");
   return product.price_piece_ttc ?? priceForHt(product, unit);
+}
+
+// Compute the price of one full cagette from its content + unit price.
+function cagettePrice(product: Product, mode: "ht" | "ttc"): number | null {
+  const cp = product.cagette_content_pieces;
+  const ck = product.cagette_content_kg;
+  if (cp != null && cp > 0) {
+    const p = mode === "ttc" ? product.price_piece_ttc ?? null : product.price_piece ?? null;
+    return p != null ? Math.round(p * cp * 100) / 100 : null;
+  }
+  if (ck != null && ck > 0) {
+    const p = mode === "ttc" ? product.price_kg_ttc ?? null : product.price_kg ?? null;
+    return p != null ? Math.round(p * ck * 100) / 100 : null;
+  }
+  return null;
+}
+
+// Human-readable description of what a cagette contains (e.g. "24 pce / cagette").
+export function cagetteContentLabel(product: Product): string | null {
+  if (product.cagette_content_pieces != null && product.cagette_content_pieces > 0) {
+    return `${product.cagette_content_pieces} pce / cagette`;
+  }
+  if (product.cagette_content_kg != null && product.cagette_content_kg > 0) {
+    return `${product.cagette_content_kg} kg / cagette`;
+  }
+  return null;
 }
 
 export type PriceMode = "ht" | "ttc";
@@ -33,6 +61,7 @@ export function availableUnits(product: Product): SellUnit[] {
   const units: SellUnit[] = [];
   if (priceForHt(product, "kg") != null) units.push("kg");
   if (priceForHt(product, "piece") != null) units.push("piece");
+  if (priceForHt(product, "cagette") != null) units.push("cagette");
   return units;
 }
 

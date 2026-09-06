@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
+import { api } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -27,11 +28,23 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [heroImg, setHeroImg] = useState<string>(HERO);
   const { signIn } = useAuth();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.getLoginCover();
+        if (res.image_url) setHeroImg(res.image_url);
+      } catch {
+        // silent fallback to default HERO
+      }
+    })();
+  }, []);
 
   async function submit() {
     if (!email.trim() || !password) {
@@ -63,7 +76,7 @@ export default function Login() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <Image source={{ uri: HERO }} style={styles.heroImg} contentFit="cover" />
+          <Image source={{ uri: heroImg }} style={styles.heroImg} contentFit="cover" />
           <LinearGradient
             colors={["rgba(17,24,39,0.2)", "rgba(17,24,39,0.85)"]}
             style={styles.heroScrim}

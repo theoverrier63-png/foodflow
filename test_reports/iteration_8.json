@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 8 — 'Unité Cagette' feature fully verified end-to-end. Backend: 8/8 pytest cases in /app/backend/tests/test_cagette.py pass — (1) POST /api/admin/products with cagette_content_pieces=24 + price_piece=1.20 → 201 with cagette_content_pieces=24 & cagette_content_kg=null, (2) same but without price_piece → 422 'Prix à la pièce requis pour vendre en cagette', (3) POST with cagette_content_kg=5 + price_kg=2.5 → 201 with cagette_content_kg=5.0 & cagette_content_pieces=null, (4) same but without price_kg → 422 'Prix au kilo requis pour vendre en cagette', (5) BOTH fields set → 422 'pas les deux', (6) PUT switches pieces→kg (pieces cleared, kg persisted) verified via subsequent GET, (7) GET /api/products includes new fields on every product AND seed products have both cagette fields = null (migration OK), (8) POST /api/orders as test@leray.fr with sell_unit='cagette', price=28.80, qty=2 → 201 stored order + GET /api/admin/orders/{id}/invoice → 200 application/pdf starting with %PDF magic bytes. Frontend (mobile viewport 390×844 on https://foodflow-145.preview.emergentagent.com): Flow A (admin product-edit) — Salade batavia edit shows the new 'Cagette (optionnel)' section with 3 chips (cagette-mode-none/pieces/kg); tapping pieces reveals edit-cagette-content input; entering '24' + save shows toast 'Produit mis à jour' and returns to list; re-opening Salade preserves mode-pieces + input value '24'; Pommes Gala switched to kg=5 persisted, then switched to none clears both fields (re-verified via GET); Basilic frais (only price_piece) + cagette-mode-kg → red toast 'Renseignez le prix HT au kilo pour vendre en cagette'; Carottes (only price_kg) + cagette-mode-pieces → red toast 'Renseignez le prix HT à la pièce pour vendre en cagette'. Flow B (business client) — Salade batavia was configured with cagette_content_pieces=24; catalog opened → tapping product card → new chip unit-cagette visible below kg/piece row with icon + 'À la cagette' + '24 pce / cagette' + computed '28.80 €' (24 × 1.20 HT); tapping the chip switches to cagette mode, price line 'detail-price-cagette' shows '28.80 € HT / cagette', qty stepper integer step; setting qty=2 → subtotal 57.60 €; add-to-cart succeeds; Panier tab (badge=1) shows line 'Salade batavia • 28.80 € / cag. • Pièce' at qty=2 with unit 'cag.' and Total HT 57.60 €; submit-order-button → order #78F79922 appears in Commandes tab with '2 cag.' + '57.60 €'. Flow C (personal TTC) — Salade batavia additionally got price_piece_ttc=1.30; new personal user (iter8perso@leray.fr / Test1234!) → Salade detail cagette chip shows '24 pce / cagette • 31.20 €' (24 × 1.30 TTC) and price line 'detail-price-cagette' = '31.20 € TTC / cagette'. Regression — admin dashboard opens, Season screen opens, habits-block hidden for personal user, Courgettes (no cagette content) detail does NOT render unit-cagette chip. All cleanup done: 2 test cagette products deleted via API (test_cagette cleanup fixture), TEST_iter8 orders removed via Mongo, Salade batavia + Pommes Gala reset to pre-test state (cagette_content_pieces/kg + price_piece_ttc set back to null in Mongo), personal test user iter8perso@leray.fr deleted from Mongo.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "ToastProvider Animated.View", "issue": "Pre-existing console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' — still emitted on every toast fire (unchanged since iter 3). Reference: /app/frontend/src/toast.tsx:38"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cagette.py",
+    "/app/test_reports/pytest/iter8_cagette.xml",
+    "/app/test_reports/iteration_8.json"
+  ],
+  "action_items": [
+    "(Carry-over from iter7) Move `pointerEvents='none'` from prop to style in /app/frontend/src/toast.tsx to silence the RN deprecation warning.",
+    "(Carry-over from iter7) Fix route ordering: move `@api.get('/admin/orders/export')` ABOVE `@api.get('/admin/orders/{order_id}')` in /app/backend/server.py so the export endpoint stops being shadowed and returning 404."
+  ],
+  "critical_code_review_comments": [
+    "server.py ProductIn.resolved() correctly enforces all 3 cagette constraints (pieces→price_piece required, kg→price_kg required, not both) with the exact French error strings from the spec — verified by test_02/04/05.",
+    "server.py Product model exposes both cagette_content_pieces + cagette_content_kg (Optional). Migration on startup back-fills existing docs where the fields don't exist to null (server.py:325-333) — verified by test_07 against seed products.",
+    "server.py admin_create/update_product both project _id out via find_one_and_update(projection={'_id':0}) / doc.pop('_id') — no ObjectId leak.",
+    "server.py PDF invoice line for sell_unit='cagette' correctly maps to 'cag.' label (server.py:798) — verified via curl download of a real cagette order's PDF (200 application/pdf, starts with %PDF).",
+    "server.py ProductIn.norm_prices treats price_piece_ttc=0/None consistently → None; norm_pieces on cagette_content_pieces treats 0 → None so 'clear cagette by typing 0' works via API.",
+    "cart-context.tsx cagettePrice() rounds to 2 decimals (Math.round(x*100)/100) — matches spec 'rounded to 2 dp'. TTC falls back silently to HT when price_piece_ttc/price_kg_ttc is null (verified for HT-only products).",
+    "cart-context.tsx availableUnits() adds 'cagette' only when priceForHt(product,'cagette') != null → guarantees the unit-cagette chip is hidden for products without cagette content (verified in Flow D — Courgettes has no chip).",
+    "product-detail.tsx uses roundQty which returns integer for both 'piece' and 'cagette' (units.ts:42) → the qty stepper for cagette advances by 1 (verified).",
+    "product-edit.tsx save handler pre-validates the price/mode combination client-side (returns French toast before hitting the API) — matches the same error strings the backend would return. Nice defence-in-depth (verified for Basilic+kg and Carottes+pieces).",
+    "product-edit.tsx sends cagette_content_pieces / cagette_content_kg as undefined for mode='none' → backend $set correctly overwrites the stored fields to null (verified via re-GET).",
+    "units.ts unitShort('cagette')='cag.' — matches PDF invoice + cart line unit label. Consistent everywhere.",
+    "No raw text outside <Text>; product-edit uses StyleSheet + React-Native Pressable/TextInput; testIDs `cagette-mode-none/pieces/kg` + `edit-cagette-content` + `unit-cagette` all present as spec'd."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cagette.py (new — 8 pytest cases covering Product cagette validation, PUT switching, GET migration, and end-to-end order+PDF)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 iter8 cagette tests)",
+    "frontend": "100% for the iter8 acceptance list (Flow A admin edit chips + input + persistence + error toasts; Flow B client cagette chip shows 24 pce/cagette + 28.80 € HT + cart line 'cag.' + submit order visible in Commandes; Flow C personal user cagette chip shows 31.20 € TTC; Flow D regression — Season + admin dashboard + habits hidden for personal + no cagette chip on kg-only product without content)."
+  },
+  "seed_data_creation": "Temporary during test: cagette pieces=24 + price_piece_ttc=1.30 on Salade batavia, cagette kg=5 on Pommes Gala (then cleared), 1 order (id 78F79922, TEST_iter8_ui_cagette) on test@leray.fr, 1 personal user iter8perso@leray.fr. Backend pytest also created 3 test products with names prefixed TEST_Cagette_* — all deleted by autouse cleanup fixture. Post-test Mongo cleanup: reset Salade batavia + Pommes Gala cagette fields + price_piece_ttc back to null, deleted TEST_iter8 orders, deleted iter8perso user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New product cagette fields: `cagette_content_pieces:int|null` and `cagette_content_kg:float|null` — mutually exclusive; migration on backend startup back-fills existing docs to null. Business rules: if cagette_content_pieces set → price_piece REQUIRED (else 422 'Prix à la pièce requis pour vendre en cagette'); if cagette_content_kg set → price_kg REQUIRED (else 422 'Prix au kilo requis pour vendre en cagette'); both set → 422 'La cagette doit être définie en pièces OU en kg, pas les deux'. Cagette price is computed client-side: content × unit_price (HT for business/admin, TTC for personal with silent fallback to HT if TTC null), rounded to 2 dp. Frontend testIDs: `cagette-mode-none|pieces|kg` (admin edit chips), `edit-cagette-content` (input), `unit-cagette` (client detail chip), `detail-price-cagette` (main price line — includes 'HT'/'TTC' suffix). Cart line unit label = 'cag.'. PDF invoice line for cagette sell_unit uses 'cag.' label. Order sell_unit union is now 'kg'|'piece'|'cagette' (units.ts). Test product ids from Salade batavia = 908167b1-6731-44e2-ad4c-ab89c79a1cda. Known pre-existing bug (untouched): route ordering /admin/orders/export shadowed by /admin/orders/{order_id} — swap declaration order in server.py to fix.",
+  "rca_of_issue": "N/A — feature verification only. All acceptance criteria in the iter8 review request met against the running backend and Expo web preview."
+}
