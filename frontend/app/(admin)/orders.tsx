@@ -43,6 +43,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>("Toutes");
+  const [audience, setAudience] = useState<"all" | "business" | "personal">("all");
   const [target, setTarget] = useState<Order | null>(null);
   const [updating, setUpdating] = useState(false);
 
@@ -51,6 +52,13 @@ export default function AdminOrders() {
       const [os, st] = await Promise.all([api.adminOrders(), api.adminStatuses()]);
       setOrders(os);
       setStatuses(st.statuses);
+      // Mark orders as seen — clears the unread badge on the dashboard
+      if (os.length > 0) {
+        try {
+          const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+          await AsyncStorage.setItem("admin.orders.lastSeen", os[0].created_at);
+        } catch { /* ignore */ }
+      }
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
     } finally {
@@ -70,9 +78,17 @@ export default function AdminOrders() {
   );
 
   const filtered = useMemo(() => {
-    if (selectedFilter === "Toutes") return orders;
-    return orders.filter((o) => o.status === selectedFilter);
-  }, [orders, selectedFilter]);
+    let list = orders;
+    if (audience !== "all") list = list.filter((o) => (o.account_type ?? "business") === audience);
+    if (selectedFilter !== "Toutes") list = list.filter((o) => o.status === selectedFilter);
+    return list;
+  }, [orders, selectedFilter, audience]);
+
+  const counts = useMemo(() => ({
+    all: orders.length,
+    business: orders.filter((o) => (o.account_type ?? "business") === "business").length,
+    personal: orders.filter((o) => o.account_type === "personal").length,
+  }), [orders]);
 
   async function changeStatus(newStatus: string) {
     if (!target) return;
@@ -124,6 +140,53 @@ export default function AdminOrders() {
         </Pressable>
         <Text style={styles.headerTitle}>Commandes</Text>
         <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.audienceRow} testID="audience-tabs">
+        {([
+          { key: "all" as const, label: "Toutes", count: counts.all },
+          { key: "business" as const, label: "Pros", count: counts.business },
+          { key: "personal" as const, label: "Particuliers", count: counts.personal },
+        ]).map((t) => {
+          const active = audience === t.key;
+          return (
+            <Pressable
+              key={t.key}
+              testID={`audience-${t.key}`}
+              onPress={() => setAudience(t.key)}
+              style={[
+                styles.audienceTab,
+                active && { backgroundColor: colors.surface, borderColor: colors.brandPrimary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.audienceTabTxt,
+                  { color: active ? colors.brandPrimary : colors.muted },
+                ]}
+              >
+                {t.label}
+              </Text>
+              <View
+                style={[
+                  styles.audienceCount,
+                  {
+                    backgroundColor: active ? colors.brandPrimary : colors.surfaceTertiary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.audienceCountTxt,
+                    { color: active ? colors.onBrandPrimary : colors.muted },
+                  ]}
+                >
+                  {t.count}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       <ScrollView
@@ -204,9 +267,45 @@ export default function AdminOrders() {
               >
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.company} numberOfLines={1}>
-                      {item.company_name}
-                    </Text>
+                    <View style={styles.companyRow}>
+                      <Text style={styles.company} numberOfLines={1}>
+                        {item.company_name}
+                      </Text>
+                      <View
+                        style={[
+                          styles.typePill,
+                          {
+                            backgroundColor:
+                              item.account_type === "personal"
+                                ? colors.brandTertiary
+                                : colors.brandSecondary,
+                          },
+                        ]}
+                      >
+                        <Feather
+                          name={item.account_type === "personal" ? "user" : "briefcase"}
+                          size={9}
+                          color={
+                            item.account_type === "personal"
+                              ? colors.onBrandTertiary
+                              : colors.onBrandSecondary
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.typePillTxt,
+                            {
+                              color:
+                                item.account_type === "personal"
+                                  ? colors.onBrandTertiary
+                                  : colors.onBrandSecondary,
+                            },
+                          ]}
+                        >
+                          {item.account_type === "personal" ? "Particulier" : "Pro"}
+                        </Text>
+                      </View>
+                    </View>
                     <Text style={styles.orderMeta}>
                       #{item.id.slice(0, 8).toUpperCase()} • {formatDate(item.created_at)}
                     </Text>
@@ -329,6 +428,46 @@ const useStyles = makeStyles((colors) => ({
   },
   chipsScroll: { maxHeight: 68 },
   chipsRow: { gap: 8, paddingHorizontal: 16, alignItems: "center", height: 56 },
+  audienceRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: colors.surface,
+  },
+  audienceTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  audienceTabTxt: { fontSize: 13, fontWeight: "700" },
+  audienceCount: {
+    minWidth: 22,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  audienceCountTxt: { fontSize: 11, fontWeight: "800" },
+  companyRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  typePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  typePillTxt: { fontSize: 9, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" },
   chip: {
     height: 36,
     paddingHorizontal: 14,
@@ -351,7 +490,7 @@ const useStyles = makeStyles((colors) => ({
     gap: 8,
   },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  company: { fontSize: 15, fontWeight: "800", color: colors.onSurface },
+  company: { fontSize: 15, fontWeight: "800", color: colors.onSurface, flexShrink: 1 },
   orderMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
   addr: { fontSize: 12, color: colors.muted, marginTop: 4 },
   chipBtn: {

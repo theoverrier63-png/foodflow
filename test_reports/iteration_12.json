@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 12 — All three admin features validated (Pro/Particulier orders filter, unread badge polling, Clients pro management). Backend: 16/16 pytest cases pass in test_iter12_admin_features.py. Order.account_type is stored and returned on every /admin/orders doc (business+personal); ?account_type=business|personal filters correctly and ?account_type=nonsense returns all (no error). A freshly-registered personal user placing an order lands under the personal filter and NOT under business. /admin/orders-latest returns {latest_created_at,total} matching the newest order's timestamp and db.orders.count; non-admin GET → 403, no-auth → 401. /admin/users returns only business non-admin accounts with id, company_name, siret, email, phone, delivery_address, status, created_at, account_type='business'; excludes personal + admin; non-admin → 403. POST /admin/users/{id}/revoke flips status to rejected; POST /admin/users/{id}/restore flips back to approved; both target admin id return 404. DELETE /admin/users/{admin_id} → 404. DELETE /admin/users/{business_id} → 204; user vanishes from /admin/users; the user's past orders remain in /admin/orders with company_name='Compte supprimé' and delivery_address='—'. NOTE: /auth/login itself does NOT enforce status — a revoked user can still obtain a JWT, but POST /orders correctly returns 403 with 'Votre compte est en attente de validation par Leray-Pointel'. The review request wording ('Attempt login as that user → 403 with French message En attente') does not match implemented behavior; login stays 200 and the pending gate is at order creation. Frontend (mobile viewport 390x844, PROD URL): admin dashboard opens with nav-orders-badge=10 (from prior orders vs empty lastSeen); tapping nav-orders lands on /orders with audience-tabs visible above the status chips — counts Toutes(10) / Pros(8) / Particuliers(2) match. audience-business shows 8 rows each carrying a 'Pro' pill; audience-personal shows 2 rows with 'Particulier' pill; audience-all restores 10 rows. Returning to dashboard via back-btn clears nav-orders-badge (markAllSeen called). Placing a fresh order via API and refreshing admin session brings the badge back with count 11 (immediate on focus/mount thanks to computeUnread). Clients screen (/clients from nav-clients): clients-list renders all business accounts; filter tabs client-tab-all|approved|pending|rejected show counts (10/9/0/1 initial). Tapping an ACTIF row opens modal with revoke-btn + delete-btn (restore-btn absent); revoke → row updates in place to 'ACCÈS RETIRÉ'; re-tapping shows restore-btn only (revoke-btn hidden); restore → row goes back to 'ACTIF'. delete-btn opens confirmation, confirm-delete-client removes the row and shows 'Compte supprimé' toast at top. Regression: all admin nav rows (nav-orders, nav-clients, nav-pending, nav-products, nav-season, nav-banner, nav-login-cover, nav-watermark, nav-our-story, nav-export) still rendered on the dashboard. No React Native red screens or hard errors; a benign RN Web warning 'props.pointerEvents is deprecated. Use style.pointerEvents' appears in console (pre-existing, unrelated to this iteration).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/login",
+        "issue": "Login does not enforce user.status — a revoked (status='rejected') business user still gets a valid JWT. The pending/rejected gate exists only in POST /orders (returns 403 'Votre compte est en attente de validation par Leray-Pointel'). Review request wording expected login itself to return 403 'En attente'. If the intent is that revoked users cannot log in at all, add `if user.get('status','approved') != 'approved': raise HTTPException(403, 'En attente de validation…')` inside login(). Documented, not a hard failure since order gate still protects the actual capability."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "unknown (RN Web layer)",
+        "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Pre-existing RN 0.74+ deprecation; likely originates from a third-party component (React Navigation / Expo Router). Not blocking. Reference: seen throughout /app/frontend/app when navigating between admin screens."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_admin_features.py",
+    "/app/test_reports/pytest/iter12_results.xml"
+  ],
+  "action_items": [
+    "Optional: enforce user.status check inside POST /api/auth/login so revoked accounts get 403 at login rather than only at order creation, to match the review-request wording. Low priority since /orders is already protected."
+  ],
+  "critical_code_review_comments": [
+    "server.py admin_list_orders limits Mongo query to 1000 docs — /admin/orders-latest returns the real count via count_documents which can drift from what /admin/orders shows once there are >1000 orders. The frontend hook computes unread by iterating adminOrders() which will silently cap at 1000. Consider paginating or bumping the limit if archive grows large.",
+    "server.py admin_delete_user anonymizes orders by overwriting company_name and delivery_address. items[].name is left untouched (fine) but no audit trail of the original company is kept — acceptable for GDPR erasure but should be documented so support does not expect the historical name to be recoverable.",
+    "use-new-orders.ts polls /admin/orders on every 'isNew' tick to compute an exact unread count; on a large orders collection this can be heavy. Consider adding `?since=<lastSeen>` support to the backend and counting server-side. Not a bug — future perf note.",
+    "use-new-orders.ts audio source is a remote Google actions URL (https://actions.google.com/sounds/v1/alarms/beep_short.ogg). This is a CDN dependency that could break silently; consider bundling a small local asset via require() for reliability. Not blocking.",
+    "clients.tsx list renders synchronously with .filter each render; fine for current sizes but should switch to memoization if user list grows beyond ~2000."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_admin_features.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Backend tests created and cleaned up their own transient users: 2 personal test accounts (registered via /auth/register-personal + deleted via /admin/users/{id}), 2 business accounts (registered + approved via /admin/pending/{id}/approve + then deleted). Frontend tests: revoke/restore cycled on 'Test12' account (final state: ACTIF/approved — restored). Frontend delete flow permanently removed the 'TEST Pending a72a13ba35' account (test-only fixture, safe to leave deleted). One extra order (id 6fb4e6e4-…) placed as test@leray.fr via API to trigger the badge; benign leftover in orders history.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter12 endpoints: GET /api/admin/orders?account_type=business|personal (any other value ignored, returns all). GET /api/admin/orders-latest → {latest_created_at, total}; admin-only. GET /api/admin/users (admin) → List[BusinessUserOut] with created_at. POST /api/admin/users/{id}/revoke, POST /api/admin/users/{id}/restore, DELETE /api/admin/users/{id} (admin scoped, role!=admin filter → 404 on admin ids). Deleted users' orders are anonymized: company_name='Compte supprimé', delivery_address='—'. Frontend testIDs: audience-tabs, audience-all|business|personal (with count sub-badge inside), nav-orders-badge (red circle on the Commandes ActionRow), nav-clients, clients-list, client-tab-all|approved|pending|rejected, client-<id> per row, revoke-btn / restore-btn / delete-btn in modal, confirm-delete-client. Note: login screen uses login-email-input, login-password-input, login-submit-button, tab-company/tab-personal/tab-supplier. The useNewOrdersNotifier hook fires computeUnread() on mount + AppState 'active' + every 30s; markAllSeen() stores knownLatestRef timestamp under AsyncStorage['admin.orders.lastSeen']. Chime uses createAudioPlayer with remote OGG (https://actions.google.com/sounds/v1/alarms/beep_short.ogg).",
+  "rca_of_issue": "N/A — no defects; only a minor semantic mismatch between review-request wording ('login returns 403 En attente' for revoked users) and implementation ('login stays 200; POST /orders returns 403'). Documented under action_items as an optional tightening."
+}

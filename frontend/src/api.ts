@@ -101,6 +101,7 @@ export type Order = {
   id: string;
   user_id: string;
   company_name: string;
+  account_type?: "business" | "personal";
   delivery_address: string;
   items: CartItem[];
   total: number;
@@ -172,7 +173,14 @@ export const api = {
     request<Product>(`/admin/products/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   adminDeleteProduct: (id: string) =>
     request<void>(`/admin/products/${id}`, { method: "DELETE" }),
-  adminOrders: () => request<Order[]>("/admin/orders"),
+  adminOrders: (accountType?: "business" | "personal") =>
+    request<Order[]>(
+      `/admin/orders${accountType ? `?account_type=${accountType}` : ""}`,
+    ),
+  adminLatestOrder: () =>
+    request<{ latest_created_at: string | null; total: number }>(
+      "/admin/orders-latest",
+    ),
   adminGetOrder: (id: string) => request<Order>(`/admin/orders/${id}`),
   adminUpdateStatus: (id: string, status: string) =>
     request<Order>(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
@@ -186,6 +194,14 @@ export const api = {
     request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
   adminReject: (id: string) =>
     request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
+  adminBusinessUsers: () =>
+    request<Array<User & { created_at?: string | null }>>("/admin/users"),
+  adminRevokeUser: (id: string) =>
+    request<User>(`/admin/users/${id}/revoke`, { method: "POST" }),
+  adminRestoreUser: (id: string) =>
+    request<User>(`/admin/users/${id}/restore`, { method: "POST" }),
+  adminDeleteUser: (id: string) =>
+    request<void>(`/admin/users/${id}`, { method: "DELETE" }),
   getBanner: () => request<{ image_url: string | null }>("/banner"),
   setBanner: (image_url: string) =>
     request<{ image_url: string }>("/admin/banner", {

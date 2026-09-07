@@ -55,7 +55,8 @@
           "photosPermission": "Importer des photos de produits et de bannières.",
           "cameraPermission": "Prendre une photo d'un produit à ajouter au catalogue."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

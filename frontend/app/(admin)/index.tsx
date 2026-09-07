@@ -15,6 +15,7 @@ import { api, Order } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { downloadCsv } from "@/src/download";
+import { useNewOrdersNotifier } from "@/src/use-new-orders";
 import { makeStyles, useTheme } from "@/src/theme";
 
 export default function AdminDashboard() {
@@ -29,6 +30,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const { unreadCount, markAllSeen, refresh: refreshUnread } = useNewOrdersNotifier();
 
   const load = useCallback(async () => {
     try {
@@ -49,7 +51,8 @@ export default function AdminDashboard() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      refreshUnread();
+    }, [load, refreshUnread])
   );
 
   async function exportAll() {
@@ -137,7 +140,18 @@ export default function AdminDashboard() {
           icon="clipboard"
           title="Commandes"
           subtitle="Gérer les statuts et générer les factures"
-          onPress={() => router.push("/(admin)/orders")}
+          badgeCount={unreadCount}
+          onPress={() => {
+            markAllSeen();
+            router.push("/(admin)/orders");
+          }}
+        />
+        <ActionRow
+          testID="nav-clients"
+          icon="users"
+          title="Clients professionnels"
+          subtitle="Voir tous les comptes pro, retirer l'accès ou supprimer"
+          onPress={() => router.push("/(admin)/clients")}
         />
         <ActionRow
           testID="nav-products"
@@ -208,6 +222,7 @@ function ActionRow({
   onPress,
   loading,
   testID,
+  badgeCount,
 }: {
   icon: string;
   title: string;
@@ -215,6 +230,7 @@ function ActionRow({
   onPress: () => void;
   loading?: boolean;
   testID?: string;
+  badgeCount?: number;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -227,6 +243,11 @@ function ActionRow({
     >
       <View style={styles.actionIcon}>
         <Feather name={icon as any} size={18} color={colors.brandPrimary} />
+        {badgeCount && badgeCount > 0 ? (
+          <View style={styles.badge} testID={`${testID}-badge`}>
+            <Text style={styles.badgeTxt}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.actionTitle}>{title}</Text>
@@ -312,7 +333,23 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.brandSecondary,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    paddingHorizontal: 5,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.error,
+    borderWidth: 2,
+    borderColor: colors.surfaceSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeTxt: { color: colors.onError, fontSize: 10, fontWeight: "800" },
   actionTitle: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   actionSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
 }));

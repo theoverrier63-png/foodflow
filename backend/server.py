@@ -260,6 +260,7 @@ class Order(BaseModel):
     id: str
     user_id: str
     company_name: str
+    account_type: str = "business"  # "business" | "personal"
     delivery_address: str
     items: List[CartItem]
     total: float
@@ -456,6 +457,12 @@ async def startup():
         {"$set": {"subcategory": None}},
     )
 
+    # Backfill account_type on legacy orders by joining with the user
+    async for o in db.orders.find({"account_type": {"$exists": False}}, {"user_id": 1, "id": 1}):
+        u = await db.users.find_one({"id": o.get("user_id")}, {"_id": 0, "account_type": 1})
+        acc = (u or {}).get("account_type", "business")
+        await db.orders.update_one({"id": o["id"]}, {"$set": {"account_type": acc}})
+
     # Seed default global season setting
     existing_season = await db.settings.find_one({"key": "current_season"})
     if not existing_season:
@@ -557,6 +564,8 @@ async def login(body: LoginIn):
     doc = await db.users.find_one({"email": body.email}, {"_id": 0})
     if not doc or not verify_password(body.password, doc["password_hash"]):
         raise HTTPException(401, "Email ou mot de passe incorrect")
+    if doc.get("status") == "rejected":
+        raise HTTPException(403, "Votre accès a été retiré. Contactez Leray-Pointel.")
     return {"access_token": make_token(doc["id"]), "token_type": "bearer", "user": user_public(doc)}
 
 
@@ -759,6 +768,7 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
         "id": order_id,
         "user_id": user["id"],
         "company_name": user["company_name"],
+        "account_type": user.get("account_type", "business"),
         "delivery_address": user["delivery_address"],
         "items": [i.model_dump() for i in body.items],
         "total": total,
@@ -957,9 +967,25 @@ async def admin_export_all(_: dict = Depends(require_admin)):
 
 
 @api.get("/admin/orders", response_model=List[Order])
-async def admin_list_orders(_: dict = Depends(require_admin)):
-    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def admin_list_orders(account_type: Optional[str] = None, _: dict = Depends(require_admin)):
+    q = {}
+    if account_type in ("business", "personal"):
+        q["account_type"] = account_type
+    docs = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return docs
+
+
+@api.get("/admin/orders-latest")
+async def admin_latest_order(_: dict = Depends(require_admin)):
+    """Lightweight endpoint used for polling: returns the most recent order's created_at
+    plus counts, so the admin app can compare with the last-seen marker to display a
+    red badge and trigger a sound alert."""
+    latest = await db.orders.find_one({}, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+    total = await db.orders.count_documents({})
+    return {
+        "latest_created_at": (latest or {}).get("created_at"),
+        "total": total,
+    }
 
 
 @api.get("/admin/orders/{order_id}", response_model=Order)
@@ -1195,6 +1221,69 @@ async def admin_reject(user_id: str, _: dict = Depends(require_admin)):
     if not doc:
         raise HTTPException(404, "Compte introuvable")
     return user_public(doc)
+
+
+# ---- Business clients (Pros) management ----
+
+class BusinessUserOut(UserOut):
+    created_at: Optional[str] = None
+
+
+@api.get("/admin/users", response_model=List[BusinessUserOut])
+async def admin_list_business_users(_: dict = Depends(require_admin)):
+    """List every professional (business) client account with their meta."""
+    docs = await db.users.find(
+        {"account_type": "business", "role": {"$ne": "admin"}},
+        {"_id": 0, "password_hash": 0},
+    ).sort("created_at", -1).to_list(2000)
+    out = []
+    for d in docs:
+        base = user_public(d)
+        base["created_at"] = d.get("created_at")
+        out.append(base)
+    return out
+
+
+@api.post("/admin/users/{user_id}/revoke", response_model=UserOut)
+async def admin_revoke_user(user_id: str, _: dict = Depends(require_admin)):
+    """Revoke a pro account access without deleting it (kept for order history)."""
+    doc = await db.users.find_one_and_update(
+        {"id": user_id, "role": {"$ne": "admin"}},
+        {"$set": {"status": "rejected"}},
+        projection={"_id": 0},
+        return_document=True,
+    )
+    if not doc:
+        raise HTTPException(404, "Compte introuvable")
+    return user_public(doc)
+
+
+@api.post("/admin/users/{user_id}/restore", response_model=UserOut)
+async def admin_restore_user(user_id: str, _: dict = Depends(require_admin)):
+    """Restore access previously revoked."""
+    doc = await db.users.find_one_and_update(
+        {"id": user_id, "role": {"$ne": "admin"}},
+        {"$set": {"status": "approved"}},
+        projection={"_id": 0},
+        return_document=True,
+    )
+    if not doc:
+        raise HTTPException(404, "Compte introuvable")
+    return user_public(doc)
+
+
+@api.delete("/admin/users/{user_id}", status_code=204)
+async def admin_delete_user(user_id: str, _: dict = Depends(require_admin)):
+    """Delete a pro account. Their past orders are anonymized (kept for the archives)."""
+    target = await db.users.find_one({"id": user_id, "role": {"$ne": "admin"}})
+    if not target:
+        raise HTTPException(404, "Compte introuvable")
+    await db.orders.update_many(
+        {"user_id": user_id},
+        {"$set": {"company_name": "Compte supprimé", "delivery_address": "—"}},
+    )
+    await db.users.delete_one({"id": user_id})
+    return None
 
 
 # ---- Global settings (season) ----
