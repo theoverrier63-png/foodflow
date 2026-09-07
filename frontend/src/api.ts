@@ -72,6 +72,7 @@ export type Product = {
   id: string;
   name: string;
   category: string;
+  subcategory?: string | null;
   origin: string;
   unit: string;
   sell_unit: "kg" | "piece";
@@ -137,10 +138,19 @@ export const api = {
     }),
   me: () => request<User>("/auth/me"),
   deleteMe: () => request<void>("/auth/me", { method: "DELETE" }),
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
   getProduct: (id: string) => request<Product>(`/products/${id}`),
   categories: () => request<{ categories: string[] }>("/products/categories"),
+  subcategories: (category?: string) =>
+    request<{ by_category: Record<string, string[]> }>(
+      `/products/subcategories${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`,
+    ),
   createOrder: (items: CartItem[], notes = "") =>
     request<Order>("/orders", {
       method: "POST",
@@ -171,6 +181,24 @@ export const api = {
     request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
   adminReject: (id: string) =>
     request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
+
+  // ============ Password resets ============
+  adminPasswordResets: () =>
+    request<Array<{
+      id: string;
+      user_id: string;
+      email: string;
+      company_name: string;
+      status: string;
+      created_at: string;
+    }>>("/admin/password-resets"),
+  adminApplyPasswordReset: (id: string, password: string) =>
+    request<{ ok: boolean }>(`/admin/password-resets/${id}/apply`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  adminDismissPasswordReset: (id: string) =>
+    request<void>(`/admin/password-resets/${id}/dismiss`, { method: "POST" }),
   getBanner: () => request<{ image_url: string | null }>("/banner"),
   setBanner: (image_url: string) =>
     request<{ image_url: string }>("/admin/banner", {

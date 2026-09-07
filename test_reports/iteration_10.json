@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 10 — Sous-catégories, PasswordInput eye toggle and Mot de passe oublié flows tested end-to-end. Backend: 16/16 pytest cases passed (subcategories: GET initial empty shape, POST product with subcategory, GET returns grouped-by-category alphabetized list, filter GET /api/products?category=Fruits&subcategory=X, PUT with empty string normalises to null and drops from subcategories list, DELETE cleanup; forgot-password: 202 for unknown email without user creation, 202 + upsert pending doc for existing biz user, idempotent second call, admin email produces no reset entry, admin list contains entry with correct fields, admin apply changes password (new password logs in, old fails), entry removed from pending list after apply, biz token gets 403 on all 3 admin endpoints, cleanup resets to original). Frontend: PasswordInput eye toggle works on login (`login-password-input-toggle`), register (`reg-password-input-toggle`), register-personal (`pers-password-toggle`); `forgot-password-link` renders on Entreprise + Particulier tabs and is NOT rendered on Fournisseur tab; forgot-password submit shows `forgot-sent`, `back-login-btn` navigates back; admin dashboard has `nav-resets`, list `resets-list` shows pending entry with `apply-<id>` + `dismiss-<id>`; apply modal `new-password-input` + `confirm-new-password` updates password, entry disappears, biz login with new password succeeds; subcategory admin flow — `edit-subcategory` field visible in product-edit, saving Bananes with 'Agrumes' (free text) and Citrons jaunes via `sub-suggest-Agrumes` chip both persist; biz catalog on Fruits chip shows `subcategory-scroll` with `sub-chip-all` + `sub-chip-Agrumes`, filtering yields exactly the 2 tagged products, `habits-block` correctly hidden when a subcategory is active, switching to Légumes hides `subcategory-scroll`. All seed data cleaned up (test products deleted, password reset back to Test1234!, Bananes/Citrons jaunes subcategories cleared to null).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_subcat_forgot.py",
+    "/app/test_reports/pytest/iter10_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Admin create product endpoint returns 201; existing iter9 tests and initial iter10 assertions assumed 200. Consider unifying to 201 across admin write endpoints (or documenting the mixed 200/201 convention) so future test authors don't get false negatives.",
+    "PasswordInput toggle flips React Native's `secureTextEntry` prop, which on RN Web removes the `type='password'` attribute rather than setting `type='text'`. Functionally correct (browser renders as text), but any tests should assert absence of `type='password'` rather than presence of `type='text'`.",
+    "server.py forgot_password path returns 202 even when the account exists but is admin (correct anti-enumeration behaviour). Consider adding a rate limit (per-IP or per-email) on /api/auth/forgot-password to prevent unbounded db.password_resets growth in the current no-throttle configuration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter10_subcat_forgot.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Backend tests created 2 test products (TEST_Fraise, TEST_Citron) — both deleted at test end. Multiple password-reset docs created for test@leray.fr — all resolved (applied) with final password restored to Test1234!. Frontend tests set 'Agrumes' subcategory on Bananes and Citrons jaunes and reset them back to null; also cycled test@leray.fr password through TempPass1! back to Test1234!.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter10 endpoints: POST /api/auth/forgot-password (202 always), GET /api/admin/password-resets (pending only), POST /api/admin/password-resets/{id}/apply body {password}, POST /api/admin/password-resets/{id}/dismiss (204). Admin accounts are not resettable (silently skipped). Product model gained optional subcategory (max 100 chars, empty string normalised to None). GET /api/products/subcategories returns {by_category: {cat: [subs alphabetical]}}. GET /api/products supports subcategory query. Frontend testIDs of note: login-password-input(+toggle), reg-password-input(+toggle), pers-password(+toggle=pers-password-toggle), forgot-password-link (only rendered when mode != 'supplier'), forgot-email-input, forgot-submit-btn, forgot-sent, back-login-btn, nav-resets, resets-list, apply-<id>/dismiss-<id>, new-password-input, confirm-new-password, edit-subcategory, sub-suggest-<name>, subcategory-scroll, sub-chip-all, sub-chip-<name>. Note that Expo Router leaves previous screens in the DOM; when navigating back, multiple tab-company nodes may match — use .first or hard reload.",
+  "rca_of_issue": "N/A — no defects found."
+}

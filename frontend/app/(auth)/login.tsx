@@ -19,6 +19,7 @@ import { api } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import PasswordInput from "@/src/components/PasswordInput";
 
 const HERO =
   "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxmcmVzaCUyMHdob2xlc2FsZSUyMHZlZ2V0YWJsZXMlMjBjcmF0ZXxlbnwwfHx8fDE3ODg1NDgxNzN8MA&ixlib=rb-4.1.0&q=85";
@@ -190,14 +191,11 @@ export default function Login() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Mot de passe</Text>
-            <TextInput
+            <PasswordInput
               testID="login-password-input"
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
-              placeholderTextColor={colors.muted}
-              secureTextEntry
-              style={styles.input}
             />
           </View>
 
@@ -218,6 +216,14 @@ export default function Login() {
               </Text>
             )}
           </Pressable>
+
+          {!isSupplier ? (
+            <Link href="/(auth)/forgot-password" asChild>
+              <Pressable testID="forgot-password-link" hitSlop={8} style={styles.forgotWrap}>
+                <Text style={styles.forgotTxt}>Mot de passe oublié&nbsp;?</Text>
+              </Pressable>
+            </Link>
+          ) : null}
 
           {isSupplier ? (
             <>
@@ -346,6 +352,13 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 8,
   },
   ctaTxt: { color: colors.onBrandPrimary, fontSize: 16, fontWeight: "700" },
+  forgotWrap: { alignSelf: "center", paddingVertical: 6 },
+  forgotTxt: {
+    color: colors.brandPrimary,
+    fontSize: 13,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
   footer: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 12 },
   footerAlt: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 4 },
   footerTxt: { color: colors.muted, fontSize: 14 },

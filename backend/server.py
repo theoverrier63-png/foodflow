@@ -110,6 +110,7 @@ class Product(BaseModel):
     id: str
     name: str
     category: str
+    subcategory: Optional[str] = None
     origin: str
     unit: str
     sell_unit: str = "piece"
@@ -331,6 +332,11 @@ async def startup():
         {"cagette_content_kg": {"$exists": False}},
         {"$set": {"cagette_content_kg": None}},
     )
+    # Subcategory migration (default None)
+    await db.products.update_many(
+        {"subcategory": {"$exists": False}},
+        {"$set": {"subcategory": None}},
+    )
 
     # Seed default global season setting
     existing_season = await db.settings.find_one({"key": "current_season"})
@@ -455,11 +461,91 @@ async def delete_me(user: dict = Depends(current_user)):
     return None
 
 
+# ---- Password reset (manual, admin-mediated) ----
+
+class ForgotIn(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def norm_email(cls, v):
+        return str(v).strip().lower()
+
+
+class ResetIn(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+
+
+@api.post("/auth/forgot-password", status_code=202)
+async def forgot_password(body: ForgotIn):
+    """Register a password-reset request. Always returns 202 to avoid email enumeration.
+    The admin will process it manually (Leray-Pointel calls the customer back)."""
+    user = await db.users.find_one({"email": body.email}, {"_id": 0, "id": 1, "role": 1, "company_name": 1, "email": 1})
+    if user and user.get("role") != "admin":
+        await db.password_resets.update_one(
+            {"user_id": user["id"], "status": "pending"},
+            {"$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "email": user["email"],
+                "company_name": user.get("company_name", ""),
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+    return {"ok": True}
+
+
+class PasswordResetOut(BaseModel):
+    id: str
+    user_id: str
+    email: EmailStr
+    company_name: str
+    status: str
+    created_at: str
+
+
+@api.get("/admin/password-resets", response_model=List[PasswordResetOut])
+async def admin_list_password_resets(_: dict = Depends(require_admin)):
+    docs = await db.password_resets.find(
+        {"status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api.post("/admin/password-resets/{reset_id}/apply")
+async def admin_apply_password_reset(reset_id: str, body: ResetIn, _: dict = Depends(require_admin)):
+    r = await db.password_resets.find_one({"id": reset_id, "status": "pending"}, {"_id": 0})
+    if not r:
+        raise HTTPException(404, "Demande introuvable ou déjà traitée")
+    await db.users.update_one(
+        {"id": r["user_id"]},
+        {"$set": {"password_hash": hash_password(body.password)}},
+    )
+    await db.password_resets.update_one(
+        {"id": reset_id},
+        {"$set": {"status": "done", "resolved_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True}
+
+
+@api.post("/admin/password-resets/{reset_id}/dismiss", status_code=204)
+async def admin_dismiss_password_reset(reset_id: str, _: dict = Depends(require_admin)):
+    await db.password_resets.update_one(
+        {"id": reset_id, "status": "pending"},
+        {"$set": {"status": "dismissed", "resolved_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return None
+
+
 @api.get("/products", response_model=List[Product])
-async def list_products(category: Optional[str] = None):
+async def list_products(category: Optional[str] = None, subcategory: Optional[str] = None):
     q = {}
     if category and category.lower() != "tous":
         q["category"] = category
+    if subcategory:
+        q["subcategory"] = subcategory
     # Filter by current season: always keep "all" + current active season
     current = await _get_current_season()
     if current != "all":
@@ -471,6 +557,26 @@ async def list_products(category: Optional[str] = None):
 async def _get_current_season() -> str:
     doc = await db.settings.find_one({"key": "current_season"}, {"_id": 0})
     return (doc or {}).get("value", "all")
+
+
+@api.get("/products/subcategories")
+async def subcategories(category: Optional[str] = None):
+    """Return { category: [subcategories...] } grouped, ordered alphabetically."""
+    match = {"subcategory": {"$ne": None}}
+    if category and category.lower() != "tous":
+        match["category"] = category
+    pipeline = [
+        {"$match": match},
+        {"$group": {"_id": {"category": "$category", "subcategory": "$subcategory"}}},
+        {"$sort": {"_id.subcategory": 1}},
+    ]
+    out: dict[str, list[str]] = {}
+    async for row in db.products.aggregate(pipeline):
+        cat = row["_id"]["category"]
+        sub = row["_id"]["subcategory"]
+        if sub:
+            out.setdefault(cat, []).append(sub)
+    return {"by_category": out}
 
 
 @api.get("/products/categories")
@@ -564,6 +670,7 @@ ALLOWED_STATUSES = ["En attente", "Validée", "En préparation", "Livrée", "Ann
 class ProductIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     category: str = Field(min_length=1, max_length=100)
+    subcategory: Optional[str] = Field(default=None, max_length=100)
     origin: str = Field(min_length=1, max_length=100)
     unit: str = Field(min_length=1, max_length=100)
     price_kg: Optional[float] = Field(default=None, gt=0)
@@ -593,6 +700,14 @@ class ProductIn(BaseModel):
     def norm_pieces(cls, v):
         return None if v in (0,) else v
 
+    @field_validator("subcategory")
+    @classmethod
+    def norm_subcategory(cls, v):
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
     def resolved(self) -> dict:
         if self.price_kg is None and self.price_piece is None:
             raise HTTPException(422, "Au moins un prix HT (au kilo ou à la pièce) est requis")
@@ -608,6 +723,7 @@ class ProductIn(BaseModel):
         return {
             "name": self.name.strip(),
             "category": self.category.strip(),
+            "subcategory": self.subcategory,
             "origin": self.origin.strip(),
             "unit": self.unit.strip(),
             "sell_unit": sell_unit,

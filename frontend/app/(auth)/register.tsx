@@ -16,6 +16,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import PasswordInput from "@/src/components/PasswordInput";
 
 type F = {
   company_name: string;
@@ -162,14 +163,11 @@ export default function Register() {
         </Field>
 
         <Field label="Mot de passe">
-          <TextInput
+          <PasswordInput
             testID="reg-password-input"
             value={f.password}
             onChangeText={(v) => set("password", v)}
             placeholder="••••••••"
-            placeholderTextColor={colors.muted}
-            secureTextEntry
-            style={styles.input}
           />
         </Field>
       </ScrollView>

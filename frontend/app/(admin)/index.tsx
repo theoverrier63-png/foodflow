@@ -154,6 +154,13 @@ export default function AdminDashboard() {
           onPress={() => router.push("/(admin)/pending")}
         />
         <ActionRow
+          testID="nav-resets"
+          icon="key"
+          title="Mots de passe oubliés"
+          subtitle="Traiter les demandes de réinitialisation des clients"
+          onPress={() => router.push("/(admin)/resets")}
+        />
+        <ActionRow
           testID="nav-season"
           icon="sun"
           title="Saison en cours"

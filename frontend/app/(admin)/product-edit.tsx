@@ -22,6 +22,7 @@ import { makeStyles, useTheme } from "@/src/theme";
 type Form = {
   name: string;
   category: string;
+  subcategory: string;
   origin: string;
   unit: string;
   image_url: string;
@@ -32,6 +33,7 @@ type Form = {
 const EMPTY: Form = {
   name: "",
   category: "Fruits",
+  subcategory: "",
   origin: "France",
   unit: "",
   image_url:
@@ -64,8 +66,25 @@ export default function ProductEdit() {
   const [pricePieceTtcStr, setPricePieceTtcStr] = useState("");
   const [cagetteMode, setCagetteMode] = useState<"none" | "pieces" | "kg">("none");
   const [cagetteContentStr, setCagetteContentStr] = useState("");
+  const [subSuggestions, setSubSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
+
+  // Load subcategory suggestions when the selected category changes
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.subcategories(form.category);
+        if (alive) setSubSuggestions(res.by_category[form.category] ?? []);
+      } catch {
+        if (alive) setSubSuggestions([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [form.category]);
 
   useEffect(() => {
     if (!editing) return;
@@ -81,6 +100,7 @@ export default function ProductEdit() {
         setForm({
           name: p.name,
           category: p.category,
+          subcategory: (p as any).subcategory ?? "",
           origin: p.origin,
           unit: p.unit,
           image_url: p.image_url,
@@ -155,6 +175,7 @@ export default function ProductEdit() {
 
     const payload = {
       ...form,
+      subcategory: form.subcategory.trim() || undefined,
       price_kg: priceKg ?? undefined,
       price_piece: pricePiece ?? undefined,
       price_kg_ttc: priceKgTtc ?? undefined,
@@ -260,6 +281,52 @@ export default function ProductEdit() {
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Sous-catégorie (optionnel)</Text>
+          <Text style={styles.hint}>
+            Regroupe des produits proches dans la catégorie « {form.category} » (ex : « Fruits rouges », « Racines », « Aromatiques »).
+          </Text>
+          <TextInput
+            testID="edit-subcategory"
+            value={form.subcategory}
+            onChangeText={(v) => set("subcategory", v)}
+            placeholder="Laissez vide si aucune"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
+          {subSuggestions.length > 0 ? (
+            <View style={styles.chipsRow}>
+              {subSuggestions.map((s) => {
+                const active =
+                  form.subcategory.trim().toLowerCase() === s.toLowerCase();
+                return (
+                  <Pressable
+                    key={s}
+                    testID={`sub-suggest-${s}`}
+                    onPress={() => set("subcategory", active ? "" : s)}
+                    style={[
+                      styles.chip,
+                      active
+                        ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                        : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: active ? colors.onBrandPrimary : colors.onSurface,
+                        fontWeight: "600",
+                        fontSize: 12,
+                      }}
+                    >
+                      {s}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.field}>

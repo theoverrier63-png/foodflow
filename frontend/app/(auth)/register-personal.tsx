@@ -16,6 +16,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { useAuth } from "@/src/auth-context";
 import { useToast } from "@/src/toast";
 import { makeStyles, useTheme } from "@/src/theme";
+import PasswordInput from "@/src/components/PasswordInput";
 
 type F = {
   full_name: string;
@@ -90,7 +91,6 @@ export default function RegisterPersonal() {
           { k: "email", label: "Email", ph: "vous@example.com", tid: "pers-email", kb: "email-address" as const, autoCap: "none" as const },
           { k: "phone", label: "Téléphone", ph: "+33 6 12 34 56 78", tid: "pers-phone", kb: "phone-pad" as const },
           { k: "delivery_address", label: "Adresse de livraison", ph: "10 rue …", tid: "pers-address", multi: true },
-          { k: "password", label: "Mot de passe", ph: "••••••••", tid: "pers-password", secure: true },
         ].map((row: any) => (
           <View key={row.k} style={styles.field}>
             <Text style={styles.label}>{row.label}</Text>
@@ -100,7 +100,6 @@ export default function RegisterPersonal() {
               onChangeText={(v) => set(row.k, v)}
               placeholder={row.ph}
               placeholderTextColor={colors.muted}
-              secureTextEntry={row.secure}
               keyboardType={row.kb}
               autoCapitalize={row.autoCap}
               multiline={row.multi}
@@ -108,6 +107,15 @@ export default function RegisterPersonal() {
             />
           </View>
         ))}
+        <View style={styles.field}>
+          <Text style={styles.label}>Mot de passe</Text>
+          <PasswordInput
+            testID="pers-password"
+            value={f.password}
+            onChangeText={(v) => set("password", v)}
+            placeholder="••••••••"
+          />
+        </View>
       </ScrollView>
 
       <View style={[styles.stickyCta, { paddingBottom: insets.bottom + 12 }]}>

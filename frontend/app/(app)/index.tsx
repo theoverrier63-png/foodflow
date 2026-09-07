@@ -33,7 +33,9 @@ export default function Catalog() {
   const [products, setProducts] = useState<Product[]>([]);
   const [habits, setHabits] = useState<Product[]>([]);
   const [cats, setCats] = useState<string[]>(["Tous"]);
+  const [subs, setSubs] = useState<Record<string, string[]>>({});
   const [selectedCat, setSelectedCat] = useState("Tous");
+  const [selectedSub, setSelectedSub] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,6 +47,7 @@ export default function Catalog() {
     user?.account_type === "business" &&
     user?.status === "approved" &&
     selectedCat === "Tous" &&
+    selectedSub === null &&
     !search.trim() &&
     habits.length > 0;
 
@@ -53,18 +56,20 @@ export default function Catalog() {
       setError(null);
       const canFetchHabits =
         user?.account_type === "business" && user?.status === "approved";
-      const [cs, ps, bn, hs, wm] = await Promise.all([
+      const [cs, ps, bn, hs, wm, sc] = await Promise.all([
         api.categories(),
         api.products(),
         api.getBanner().catch(() => ({ image_url: null })),
         canFetchHabits ? api.orderHabits(8).catch(() => []) : Promise.resolve([]),
         api.getWatermark().catch(() => ({ image_url: null })),
+        api.subcategories().catch(() => ({ by_category: {} })),
       ]);
       setCats(cs.categories);
       setProducts(ps);
       setBanner(bn.image_url);
       setHabits(hs);
       setWatermark(wm.image_url);
+      setSubs(sc.by_category);
     } catch (e: any) {
       setError(e?.message || "Erreur");
     } finally {
@@ -86,6 +91,7 @@ export default function Catalog() {
   const filtered = useMemo(() => {
     let list = products;
     if (selectedCat !== "Tous") list = list.filter((p) => p.category === selectedCat);
+    if (selectedSub) list = list.filter((p) => p.subcategory === selectedSub);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -93,7 +99,9 @@ export default function Catalog() {
       );
     }
     return list;
-  }, [products, selectedCat, search]);
+  }, [products, selectedCat, selectedSub, search]);
+
+  const subForCat = selectedCat !== "Tous" ? subs[selectedCat] ?? [] : [];
 
   return (
     <View style={styles.root}>
@@ -150,7 +158,10 @@ export default function Catalog() {
               <Pressable
                 key={c}
                 testID={`cat-chip-${c}`}
-                onPress={() => setSelectedCat(c)}
+                onPress={() => {
+                  setSelectedCat(c);
+                  setSelectedSub(null);
+                }}
                 style={[
                   styles.chip,
                   active
@@ -170,6 +181,61 @@ export default function Catalog() {
             );
           })}
         </ScrollView>
+
+        {subForCat.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subRow}
+            style={styles.subScroll}
+            testID="subcategory-scroll"
+          >
+            <Pressable
+              testID="sub-chip-all"
+              onPress={() => setSelectedSub(null)}
+              style={[
+                styles.subChip,
+                selectedSub === null
+                  ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                  : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.subChipTxt,
+                  { color: selectedSub === null ? colors.onBrandPrimary : colors.onSurface },
+                ]}
+              >
+                Toutes
+              </Text>
+            </Pressable>
+            {subForCat.map((s) => {
+              const active = selectedSub === s;
+              return (
+                <Pressable
+                  key={s}
+                  testID={`sub-chip-${s}`}
+                  onPress={() => setSelectedSub(active ? null : s)}
+                  style={[
+                    styles.subChip,
+                    active
+                      ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
+                      : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.subChipTxt,
+                      { color: active ? colors.onBrandPrimary : colors.onSurface },
+                    ]}
+                  >
+                    {s}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
       </View>
 
       {loading ? (
@@ -463,6 +529,15 @@ const useStyles = makeStyles((colors) => ({
     flexShrink: 0,
   },
   chipTxt: { fontSize: 13, fontWeight: "600" },
+  subScroll: { marginTop: 6, marginHorizontal: -16 },
+  subRow: { gap: 6, paddingHorizontal: 16, alignItems: "center", paddingVertical: 4 },
+  subChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  subChipTxt: { fontSize: 12, fontWeight: "600" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   errorTxt: { color: colors.onSurface, fontSize: 14 },
   retry: {
