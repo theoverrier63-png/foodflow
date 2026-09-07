@@ -52,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(async (body: Parameters<AuthCtx["signUp"]>[0]) => {
     const res = await api.register(body);
+    if (!res?.access_token || !res?.user) {
+      throw new Error("Impossible de créer le compte. Cet email ou ce SIRET est peut-être déjà enregistré.");
+    }
     await saveToken(res.access_token);
     setUser(res.user);
   }, []);
@@ -59,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUpPersonal = useCallback(
     async (body: Parameters<AuthCtx["signUpPersonal"]>[0]) => {
       const res = await api.registerPersonal(body);
+      if (!res?.access_token || !res?.user) {
+        throw new Error("Impossible de créer le compte. Cet email est peut-être déjà enregistré.");
+      }
       await saveToken(res.access_token);
       setUser(res.user);
     },

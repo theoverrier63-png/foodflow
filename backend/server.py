@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -282,9 +283,14 @@ def verify_password(pw: str, hashed: str) -> bool:
         return False
 
 
-def make_token(user_id: str) -> str:
+def make_token(user_id: str, token_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
-    payload = {"sub": user_id, "iat": now, "exp": now + timedelta(days=JWT_TTL_DAYS)}
+    payload = {
+        "sub": user_id,
+        "iat": now,
+        "exp": now + timedelta(days=JWT_TTL_DAYS),
+        "tv": token_version,
+    }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
 
@@ -308,11 +314,15 @@ async def current_user(cred: Optional[HTTPAuthorizationCredentials] = Depends(be
     try:
         payload = jwt.decode(cred.credentials, JWT_SECRET, algorithms=[JWT_ALGO])
         uid = payload["sub"]
+        token_version = int(payload.get("tv", 0))
     except Exception:
         raise HTTPException(401, "Invalid token")
     user = await db.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(401, "User not found")
+    # Session invalidation: token issued before latest password change is rejected
+    if int(user.get("token_version", 0)) != token_version:
+        raise HTTPException(401, "Session révoquée, veuillez vous reconnecter")
     return user
 
 
@@ -463,6 +473,12 @@ async def startup():
         acc = (u or {}).get("account_type", "business")
         await db.orders.update_one({"id": o["id"]}, {"$set": {"account_type": acc}})
 
+    # Backfill token_version to 0 for legacy users (never triggers a mass logout)
+    await db.users.update_many(
+        {"token_version": {"$exists": False}},
+        {"$set": {"token_version": 0}},
+    )
+
     # Seed default global season setting
     existing_season = await db.settings.find_one({"key": "current_season"})
     if not existing_season:
@@ -527,13 +543,18 @@ async def register(body: RegisterIn):
         "role": "user",
         "account_type": "business",
         "status": "pending",  # awaits supplier approval
+        "token_version": 0,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
         await db.users.insert_one(doc)
     except DuplicateKeyError:
-        raise HTTPException(409, "Email ou SIRET déjà enregistré")
-    return {"access_token": make_token(user_id), "token_type": "bearer", "user": user_public(doc)}
+        # Neutral 202 response prevents email/SIRET enumeration
+        return JSONResponse(
+            status_code=202,
+            content={"access_token": None, "token_type": "bearer", "user": None},
+        )
+    return {"access_token": make_token(user_id, 0), "token_type": "bearer", "user": user_public(doc)}
 
 
 @api.post("/auth/register-personal", response_model=TokenOut, status_code=201)
@@ -550,13 +571,18 @@ async def register_personal(body: RegisterPersonalIn):
         "role": "user",
         "account_type": "personal",
         "status": "approved",  # no approval needed for personal buyers
+        "token_version": 0,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
         await db.users.insert_one(doc)
     except DuplicateKeyError:
-        raise HTTPException(409, "Email déjà enregistré")
-    return {"access_token": make_token(user_id), "token_type": "bearer", "user": user_public(doc)}
+        # Neutral 202 response prevents email enumeration
+        return JSONResponse(
+            status_code=202,
+            content={"access_token": None, "token_type": "bearer", "user": None},
+        )
+    return {"access_token": make_token(user_id, 0), "token_type": "bearer", "user": user_public(doc)}
 
 
 @api.post("/auth/login", response_model=TokenOut)
@@ -566,7 +592,11 @@ async def login(body: LoginIn):
         raise HTTPException(401, "Email ou mot de passe incorrect")
     if doc.get("status") == "rejected":
         raise HTTPException(403, "Votre accès a été retiré. Contactez Leray-Pointel.")
-    return {"access_token": make_token(doc["id"]), "token_type": "bearer", "user": user_public(doc)}
+    return {
+        "access_token": make_token(doc["id"], int(doc.get("token_version", 0))),
+        "token_type": "bearer",
+        "user": user_public(doc),
+    }
 
 
 @api.get("/auth/me", response_model=UserOut)
@@ -693,7 +723,7 @@ async def reset_password(body: ResetWithTokenIn):
         raise HTTPException(400, "Lien invalide")
     await db.users.update_one(
         {"id": doc["user_id"]},
-        {"$set": {"password_hash": hash_password(body.password)}},
+        {"$set": {"password_hash": hash_password(body.password)}, "$inc": {"token_version": 1}},
     )
     await db.password_reset_tokens.update_one(
         {"token": body.token},
@@ -1074,8 +1104,8 @@ def _generate_invoice_pdf(order: dict) -> bytes:
         "sarl.leraypointel@orange.fr"
     )
     client_html = (
-        f"<b>{order['company_name']}</b><br/>"
-        f"{order['delivery_address']}"
+        f"<b>{escape(order['company_name'])}</b><br/>"
+        f"{escape(order['delivery_address'])}"
     )
     parties = Table(
         [
@@ -1098,7 +1128,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     story.append(Spacer(1, 8 * mm))
 
     # ---------- Status ----------
-    story.append(Paragraph(f"<b>Statut :</b> {order['status']}", normal))
+    story.append(Paragraph(f"<b>Statut :</b> {escape(order['status'])}", normal))
     story.append(Spacer(1, 4 * mm))
 
     # ---------- Products table ----------
@@ -1110,8 +1140,8 @@ def _generate_invoice_pdf(order: dict) -> bytes:
         q = it["quantity"]
         q_str = f"{q:.2f}".rstrip("0").rstrip(".") if isinstance(q, float) else str(q)
         items_data.append([
-            it["name"],
-            it["unit"],
+            escape(it["name"]),
+            escape(it["unit"]),
             f"{q_str} {unit_label}",
             f"{it['price']:.2f}/{unit_label}",
             f"{it['price'] * q:.2f}",
@@ -1157,7 +1187,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     if order.get("notes"):
         story.append(Spacer(1, 6 * mm))
         story.append(Paragraph("<b>Note du client</b>", strong))
-        story.append(Paragraph(order["notes"], normal))
+        story.append(Paragraph(escape(order["notes"]).replace("\n", "<br/>"), normal))
 
     story.append(Spacer(1, 10 * mm))
     story.append(Paragraph(

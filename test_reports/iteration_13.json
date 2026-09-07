@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 13 security-audit fixes verified. All 4 fixes pass: (FIX1) JWT session invalidation via token_version — old token returns 401 'Session révoquée...' after reset, new token accepted; (FIX2) Both /auth/register and /auth/register-personal return neutral 202 with null access_token/user on duplicate, and new registrations still return 201 with real token; (FIX3) Admin invoice PDF endpoint returns 200 application/pdf with %PDF magic bytes even when company_name/notes/status/delivery_address contain HTML/XML special chars (escape works); (FIX4) /app/backend/.env has 600 permissions. All regression checks pass (admin login, test user login+me, orders list, order habits, admin users list, rejected user 403, token_version backfilled on all users). Frontend register error toast verified: submitting test@leray.fr on Créer un compte shows 'Impossible de créer le compte. Cet email ou ce SIRET est peut-être déjà enregistré.' and stays on /register. Cleanup verified: test@leray.fr password restored to Test1234!, no TEST_ users or bogus orders left in DB. Note: pytest xdist parallel mode causes false failures due to test@leray.fr being shared between reset test and other tests — added -o addopts='' to run serially.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "props.pointerEvents (RN Web)", "issue": "Deprecation warning in console: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Not fatal but should be migrated in components using pointerEvents prop (likely a react-native-web/react-native version). Reference: browser console during /register page load."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter13_security_audit.py",
+    "/app/test_reports/pytest/iter13_results.xml"
+  ],
+  "action_items": [
+    "Optional: migrate any usage of props.pointerEvents to style.pointerEvents to silence RN deprecation warning (not blocking).",
+    "Consider pinning pytest xdist to serial for tests that mutate the shared seeded user test@leray.fr, OR isolate reset-flow tests to a dedicated user, to avoid flaky parallel runs."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1483 lines — over the 700-line guideline. Recommend splitting into routers/auth.py, routers/orders.py, routers/admin.py, services/pdf.py, services/email.py.",
+    "make_token/current_user correctly use tv claim and reject mismatched versions with French message — implementation matches spec.",
+    "register endpoints correctly return JSONResponse 202 with content shape {access_token: None, token_type: 'bearer', user: None} on DuplicateKeyError — enumeration risk removed. Note: FastAPI response_model=TokenOut is bypassed on 202 branch because we return a raw JSONResponse; frontend TS type in api.ts must allow access_token/user null (per fix scope).",
+    "PDF invoice: html.escape applied on company_name, delivery_address, status, item name/unit, and notes (before .replace('\\n','<br/>')) — matches spec.",
+    "reset-password correctly $inc's token_version by 1; forgot-password admin skip preserved.",
+    "Legacy token_version backfill on startup covers all existing users (verified: 0 users missing the field)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter13_security_audit.py (new)",
+    "/app/test_reports/pytest/iter13_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None permanent. Ephemeral test users and one order were created and cleaned up inside tests. Verified DB has no leftover TEST_ users or bogus '<b>ACME &amp; Co</b>' orders after run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Tests in /app/backend/tests/test_iter13_security_audit.py must be run SERIALLY (add `-o addopts=''` to override pytest.ini xdist default) because the JWT session invalidation test mutates the shared test@leray.fr password. If run under xdist, other regression tests using test@leray.fr will race and fail. Consider migrating the reset flow test to a dedicated ephemeral user in future.",
+  "rca_of_issue": "N/A — no bugs found. All 14 backend tests pass, frontend register error toast displays correct French message and keeps user on form."
+}

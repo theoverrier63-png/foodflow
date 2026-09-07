@@ -118,7 +118,7 @@ export const api = {
     phone: string;
     delivery_address: string;
     password: string;
-  }) => request<{ access_token: string; user: User }>("/auth/register", {
+  }) => request<{ access_token: string | null; user: User | null }>("/auth/register", {
     method: "POST",
     body: JSON.stringify(body),
   }),
@@ -128,7 +128,7 @@ export const api = {
     phone: string;
     delivery_address: string;
     password: string;
-  }) => request<{ access_token: string; user: User }>("/auth/register-personal", {
+  }) => request<{ access_token: string | null; user: User | null }>("/auth/register-personal", {
     method: "POST",
     body: JSON.stringify(body),
   }),
