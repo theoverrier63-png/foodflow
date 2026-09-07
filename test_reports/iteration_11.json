@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 11 — Automated email-based password reset flow validated end-to-end (backend + frontend). Backend: 11/11 pytest cases passed in test_iter11_email_reset.py — POST /auth/forgot-password returns 202 for unknown emails without creating any token, creates one unused token with ~2h TTL for existing users, a second call invalidates the prior unused token (leaves exactly 1 fresh unused doc), admin email is silently ignored (no token created); backend logs confirm outgoing httpx POST https://integrations.emergentagent.com/api/v1/email/send (mostly 202, occasional 429 rate-limit swallowed by design). POST /auth/reset-password: 400 with French 'Lien invalide ou déjà utilisé' for bogus token, 200 + password rotation for valid token (new pw logs in, old pw returns 401), 400 for reused-token, 400 with 'Lien expiré, refaites une demande' when expires_at is set to the past. Admin-mediated endpoints correctly removed: GET /api/admin/password-resets and POST /api/admin/password-resets/{id}/apply both return 404 even with admin bearer token. Frontend (mobile viewport 375x667, PROD URL): forgot-password-link renders on Entreprise + Particulier tabs, absent on Fournisseur; forgot-password submit shows forgot-sent card with new copy 'Email envoyé' + 'Si un compte est associé à cet email, vous allez recevoir un lien pour choisir un nouveau mot de passe. Le lien est valable 2 heures.' + back-login-btn. Direct /reset-password?token= (empty) renders errorCard with 'Lien invalide' + retour button. Full happy path: created real token via forgot API, navigated to /reset-password?token=<real>, both PasswordInput fields fill, guardrails both fire: <6 chars → toast '6 caractères minimum'; mismatch → 'Les mots de passe ne correspondent pas'; matching NewFrontEnd1! → reset-done view → reset-go-login routes to /login → login with new password succeeds and lands on catalog. AuthGate regression: while signed-in as test@leray.fr, navigating to /reset-password?token=<valid> still renders the form (reset-password treated as public). Admin dashboard regression: nav-resets is REMOVED; all other nav-pending, nav-season, nav-banner, nav-login-cover, nav-watermark, nav-our-story, nav-products, nav-orders, nav-export testIDs still present. Cleanup: test@leray.fr password restored to Test1234! via fresh forgot+reset cycle, login verified. No defects found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_email_reset.py",
+    "/app/test_reports/pytest/iter11_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py forgot_password: no rate limiting on /api/auth/forgot-password — an attacker can enumerate emails indirectly via rate-limit noise, and can grow db.password_reset_tokens unboundedly. Recommend per-IP + per-email throttle (existing prior comment from iter10 still applies to the new endpoint).",
+    "server.py reset_password: the check `user.get('role') == 'admin'` prevents admins from resetting even if a token was manufactured; this is a good defense-in-depth, but the corresponding 'Lien invalide' error uses no distinct code — clients cannot distinguish user-role rejection from token-not-found. This is intentional (anti-enum) so no fix needed, just documenting.",
+    "PasswordInput in reset-password.tsx: on RN Web the testID `reset-password-input` maps directly to the underlying <input type='password'>, so Playwright `page.fill('[data-testid=...])` works without a child selector — consistent with other PasswordInput usages. Documented for future test authors.",
+    "Send-email failures (e.g. 429 from Emergent Resend integration) are swallowed and the endpoint still returns 202 — correct for anti-enumeration but means legit users may silently not receive an email. Consider surfacing a `logger.warning` metric or Sentry breadcrumb so ops can detect degradation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter11_email_reset.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Test suite generated multiple password_reset_tokens documents for test@leray.fr during execution. Final state: cleanup step ran a fresh forgot+reset cycle to restore test@leray.fr to Test1234!. Login verified via /api/auth/login → 200. Old/used tokens remain in db.password_reset_tokens (with used=true) for audit trail but no unused tokens leftover.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter11 endpoints: POST /api/auth/forgot-password {email} → 202 always with {ok:true}; creates a doc in db.password_reset_tokens with fields {token(str32url), user_id, email, created_at, expires_at (ISO, now+2h), used(bool)}. Prior unused tokens for same user_id are set used=true with invalidated_at. Admin email never yields a token. POST /api/auth/reset-password {token,password} → 200 {ok:true} or 400 with French detail ('Lien invalide ou déjà utilisé' | 'Lien expiré, refaites une demande' | 'Lien invalide' for admin-role). Frontend routes: /reset-password is a top-level PUBLIC Expo Router screen — AuthGate treats it as public (segments[0] === 'reset-password' short-circuits redirect). testIDs: reset-password-input, reset-confirm-input, reset-submit-btn, reset-done, reset-go-login. Note: PasswordInput's testID lands directly on the <input> element in RN Web, so page.fill works without a nested selector. Login submit is `login-submit-button` (not `login-submit-btn`). Admin resets UI + api client method + backend route + db.password_resets collection ALL removed. Email integration: httpx POST to https://integrations.emergentagent.com/api/v1/email/send with X-Email-Key header and payload {to,subject,html,from_name,contact_email}; 429 rate limit observed and swallowed silently.",
+  "rca_of_issue": "N/A — no defects found."
+}

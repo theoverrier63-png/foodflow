@@ -65,12 +65,12 @@ export default function ForgotPassword() {
         {sent ? (
           <View style={styles.successCard} testID="forgot-sent">
             <View style={styles.successIcon}>
-              <Feather name="check" size={22} color={colors.onBrandPrimary} />
+              <Feather name="mail" size={22} color={colors.onBrandPrimary} />
             </View>
-            <Text style={styles.successTitle}>Demande envoyée</Text>
+            <Text style={styles.successTitle}>Email envoyé</Text>
             <Text style={styles.successTxt}>
-              Si un compte est associé à cet email, l&apos;équipe Leray-Pointel vous
-              recontactera au plus vite pour définir un nouveau mot de passe.
+              Si un compte est associé à cet email, vous allez recevoir un lien pour
+              choisir un nouveau mot de passe. Le lien est valable 2 heures.
             </Text>
             <Pressable
               testID="back-login-btn"
@@ -83,8 +83,8 @@ export default function ForgotPassword() {
         ) : (
           <>
             <Text style={styles.intro}>
-              Renseignez l&apos;email de votre compte. Leray-Pointel vous recontactera
-              pour vous communiquer un nouveau mot de passe.
+              Renseignez l&apos;email de votre compte. Vous recevrez un email avec un
+              lien pour choisir un nouveau mot de passe.
             </Text>
 
             <View style={styles.field}>

@@ -143,6 +143,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
   getProduct: (id: string) => request<Product>(`/products/${id}`),
@@ -181,24 +186,6 @@ export const api = {
     request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
   adminReject: (id: string) =>
     request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
-
-  // ============ Password resets ============
-  adminPasswordResets: () =>
-    request<Array<{
-      id: string;
-      user_id: string;
-      email: string;
-      company_name: string;
-      status: string;
-      created_at: string;
-    }>>("/admin/password-resets"),
-  adminApplyPasswordReset: (id: string, password: string) =>
-    request<{ ok: boolean }>(`/admin/password-resets/${id}/apply`, {
-      method: "POST",
-      body: JSON.stringify({ password }),
-    }),
-  adminDismissPasswordReset: (id: string) =>
-    request<void>(`/admin/password-resets/${id}/dismiss`, { method: "POST" }),
   getBanner: () => request<{ image_url: string | null }>("/banner"),
   setBanner: (image_url: string) =>
     request<{ image_url: string }>("/admin/banner", {

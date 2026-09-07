@@ -24,7 +24,11 @@ function AuthGate() {
     const inAuth = segments[0] === "(auth)";
     const inAdmin = segments[0] === "(admin)";
     const inApp = segments[0] === "(app)";
+    const inPublicReset = segments[0] === "reset-password";
     const isAdmin = user?.role === "admin";
+
+    // Always leave the reset-password page reachable — even for signed-in users
+    if (inPublicReset) return;
 
     if (!user && !inAuth) {
       router.replace("/(auth)/login");
@@ -59,6 +63,7 @@ function InnerRoot() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />
         <Stack.Screen name="(admin)" />
+        <Stack.Screen name="reset-password" />
       </Stack>
     </>
   );

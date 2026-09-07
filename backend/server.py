@@ -5,7 +5,13 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 import os
+import re
+import ipaddress
 import logging
+import secrets
+from html import escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, field_validator, ConfigDict
 from typing import List, Optional
@@ -13,6 +19,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
+import httpx
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors as rl_colors
@@ -41,12 +48,121 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGO = "HS256"
 JWT_TTL_DAYS = 30
 
+# Emergent-managed email proxy (constant, do NOT read from env in code)
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Leray-Pointel")
+EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
+APP_PUBLIC_URL = os.environ.get("APP_PUBLIC_URL", "").rstrip("/")
+
+RESET_TOKEN_TTL_HOURS = 2
+
 app = FastAPI(title="Leray-Pointel B2B API")
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("leray-pointel")
+
+
+# ============================== EMAIL GUARDRAILS ==============================
+
+_SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
+_CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
+             "send us your password", "enter your password below", "confirm your card number",
+             "your full card number", "seed phrase", "recovery phrase", "verify your card",
+             "social security number", "confirm your bank details")
+_HOSTISH = re.compile(r"\b(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})", re.I)
+
+
+def _host_ok(host: str) -> bool:
+    if not host or "xn--" in host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return not any(host == s or host.endswith("." + s) for s in _SHORTENERS)
+
+
+def _same_site(shown: str, real: str) -> bool:
+    return shown == real or real.endswith("." + shown) or shown.endswith("." + real)
+
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls, self.anchors = set(), [], []
+        self._href, self._text = None, []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+        if tag.lower() == "a":
+            self._href = dict((k.lower(), v) for k, v in attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._href is not None:
+            self.anchors.append((self._href, "".join(self._text)))
+            self._href, self._text = None, []
+
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan()
+    scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms or input fields in email (G2)")
+    body = f"{subject}\n{html}".lower()
+    for p in _CRED_ASK:
+        if p in body:
+            raise ValueError(f"Email asks the recipient for credentials: {p!r} (G2)")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError(f"Email links/assets must be absolute https: {url!r} (G3)")
+        host = urlparse(low).hostname or ""
+        if not _host_ok(host) or urlparse(low).username is not None:
+            raise ValueError(f"Shortened, numeric-host or credential-bearing URL: {url!r} (G3)")
+    for href, text in scan.anchors:
+        real = urlparse(href.strip().lower()).hostname or ""
+        if not real:
+            continue
+        for m in _HOSTISH.finditer(text):
+            if not _same_site(m.group(1).lower(), real):
+                raise ValueError(f"Anchor text {m.group(1)!r} ≠ real link host {real!r} (G3)")
+
+
+async def send_email(*, to: str, subject: str, html: str, reply_to: Optional[str] = None) -> Optional[str]:
+    _assert_safe_email(subject, html)
+    if not EMAIL_KEY:
+        logger.warning("EMERGENT_EMAIL_KEY not configured — skipping email send")
+        return None
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    if reply_to or EMAIL_REPLY_TO:
+        payload["contact_email"] = reply_to or EMAIL_REPLY_TO
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{EMAIL_BASE_URL}/api/v1/email/send",
+                headers={"X-Email-Key": EMAIL_KEY},
+                json=payload,
+            )
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Email send failed: {e.response.status_code} {e.response.text}")
+        raise HTTPException(status_code=502, detail="Envoi d'email impossible")
+    except Exception as e:
+        logger.error(f"Email send error: {e}")
+        raise HTTPException(status_code=500, detail="Envoi d'email impossible")
 
 
 # ============================== MODELS ==============================
@@ -277,6 +393,8 @@ async def startup():
     await db.products.create_index("id", unique=True)
     await db.orders.create_index("id", unique=True)
     await db.orders.create_index("user_id")
+    # Password reset tokens: unique + auto-expire from expires_at
+    await db.password_reset_tokens.create_index("token", unique=True)
 
     # Migrate existing users to have account_type + status
     await db.users.update_many(
@@ -461,7 +579,7 @@ async def delete_me(user: dict = Depends(current_user)):
     return None
 
 
-# ---- Password reset (manual, admin-mediated) ----
+# ---- Password reset (email-based, automatic) ----
 
 class ForgotIn(BaseModel):
     email: EmailStr
@@ -472,71 +590,107 @@ class ForgotIn(BaseModel):
         return str(v).strip().lower()
 
 
-class ResetIn(BaseModel):
+class ResetWithTokenIn(BaseModel):
+    token: str = Field(min_length=16, max_length=128)
     password: str = Field(min_length=6, max_length=128)
+
+
+def _reset_link(token: str) -> str:
+    base = APP_PUBLIC_URL or ""
+    # Build the deep-link URL that opens the reset screen (Expo Router web + native)
+    return f"{base}/reset-password?token={token}" if base else ""
+
+
+def _reset_email_html(company_name: str, link: str) -> str:
+    safe_name = escape(company_name or "cher client")
+    safe_link = escape(link)
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="background-color:#F3F4F6;padding:24px 0;font-family:Arial,Helvetica,sans-serif">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+        'style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">'
+        '<tr><td style="background:#194B32;padding:24px 28px;color:#ffffff">'
+        '<div style="font-size:12px;letter-spacing:2px;font-weight:700;opacity:0.85">LERAY-POINTEL</div>'
+        '<div style="font-size:22px;font-weight:800;margin-top:6px">Réinitialisation du mot de passe</div>'
+        '</td></tr>'
+        f'<tr><td style="padding:28px;color:#111827;font-size:15px;line-height:22px">'
+        f'<p style="margin:0 0 14px 0">Bonjour {safe_name},</p>'
+        '<p style="margin:0 0 14px 0">Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau. Le lien est valable 2 heures.</p>'
+        '<p style="margin:24px 0" align="center">'
+        f'<a href="{safe_link}" style="display:inline-block;background:#194B32;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:10px;font-weight:700;font-size:15px">Choisir un nouveau mot de passe</a>'
+        '</p>'
+        '<p style="margin:0 0 14px 0;color:#6B7280;font-size:13px">Si vous n\'êtes pas à l\'origine de cette demande, vous pouvez ignorer ce message : votre mot de passe restera inchangé.</p>'
+        '</td></tr>'
+        '<tr><td style="padding:16px 28px;background:#F9FAFB;color:#6B7280;font-size:11px;line-height:16px">'
+        f'Email envoyé par {escape(EMAIL_FROM_NAME)}. Nous ne vous demanderons jamais votre mot de passe par email.'
+        '</td></tr>'
+        '</table></td></tr></table>'
+    )
 
 
 @api.post("/auth/forgot-password", status_code=202)
 async def forgot_password(body: ForgotIn):
-    """Register a password-reset request. Always returns 202 to avoid email enumeration.
-    The admin will process it manually (Leray-Pointel calls the customer back)."""
-    user = await db.users.find_one({"email": body.email}, {"_id": 0, "id": 1, "role": 1, "company_name": 1, "email": 1})
+    """Send a password-reset email if the account exists. Always returns 202 to
+    prevent email enumeration attacks."""
+    user = await db.users.find_one(
+        {"email": body.email},
+        {"_id": 0, "id": 1, "role": 1, "company_name": 1, "email": 1},
+    )
     if user and user.get("role") != "admin":
-        await db.password_resets.update_one(
-            {"user_id": user["id"], "status": "pending"},
-            {"$setOnInsert": {
-                "id": str(uuid.uuid4()),
-                "user_id": user["id"],
-                "email": user["email"],
-                "company_name": user.get("company_name", ""),
-                "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }},
-            upsert=True,
+        # Invalidate any previous unused tokens for this user
+        await db.password_reset_tokens.update_many(
+            {"user_id": user["id"], "used": False},
+            {"$set": {"used": True, "invalidated_at": datetime.now(timezone.utc).isoformat()}},
         )
+        token = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
+        await db.password_reset_tokens.insert_one({
+            "token": token,
+            "user_id": user["id"],
+            "email": user["email"],
+            "created_at": now.isoformat(),
+            "expires_at": (now + timedelta(hours=RESET_TOKEN_TTL_HOURS)).isoformat(),
+            "used": False,
+        })
+        link = _reset_link(token)
+        if link:
+            try:
+                await send_email(
+                    to=user["email"],
+                    subject="Réinitialisation de votre mot de passe Leray-Pointel",
+                    html=_reset_email_html(user.get("company_name", ""), link),
+                )
+            except HTTPException as e:
+                logger.error(f"Reset email send failed: {e.detail}")
+                # Swallow to avoid revealing send failures to the caller
     return {"ok": True}
 
 
-class PasswordResetOut(BaseModel):
-    id: str
-    user_id: str
-    email: EmailStr
-    company_name: str
-    status: str
-    created_at: str
-
-
-@api.get("/admin/password-resets", response_model=List[PasswordResetOut])
-async def admin_list_password_resets(_: dict = Depends(require_admin)):
-    docs = await db.password_resets.find(
-        {"status": "pending"}, {"_id": 0}
-    ).sort("created_at", -1).to_list(500)
-    return docs
-
-
-@api.post("/admin/password-resets/{reset_id}/apply")
-async def admin_apply_password_reset(reset_id: str, body: ResetIn, _: dict = Depends(require_admin)):
-    r = await db.password_resets.find_one({"id": reset_id, "status": "pending"}, {"_id": 0})
-    if not r:
-        raise HTTPException(404, "Demande introuvable ou déjà traitée")
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetWithTokenIn):
+    """Consume a reset token and set a new password."""
+    doc = await db.password_reset_tokens.find_one({"token": body.token, "used": False}, {"_id": 0})
+    if not doc:
+        raise HTTPException(400, "Lien invalide ou déjà utilisé")
+    try:
+        expires_at = datetime.fromisoformat(doc["expires_at"])
+    except Exception:
+        expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(400, "Lien expiré, refaites une demande")
+    user = await db.users.find_one({"id": doc["user_id"]}, {"_id": 0})
+    if not user or user.get("role") == "admin":
+        raise HTTPException(400, "Lien invalide")
     await db.users.update_one(
-        {"id": r["user_id"]},
+        {"id": doc["user_id"]},
         {"$set": {"password_hash": hash_password(body.password)}},
     )
-    await db.password_resets.update_one(
-        {"id": reset_id},
-        {"$set": {"status": "done", "resolved_at": datetime.now(timezone.utc).isoformat()}},
+    await db.password_reset_tokens.update_one(
+        {"token": body.token},
+        {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}},
     )
     return {"ok": True}
-
-
-@api.post("/admin/password-resets/{reset_id}/dismiss", status_code=204)
-async def admin_dismiss_password_reset(reset_id: str, _: dict = Depends(require_admin)):
-    await db.password_resets.update_one(
-        {"id": reset_id, "status": "pending"},
-        {"$set": {"status": "dismissed", "resolved_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    return None
 
 
 @api.get("/products", response_model=List[Product])
