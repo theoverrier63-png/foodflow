@@ -87,7 +87,7 @@ export default function Login() {
               <Feather name="shopping-bag" size={14} color={colors.onBrand} />
               <Text style={styles.brandTagTxt}>LERAY-POINTEL</Text>
             </View>
-            <Text style={styles.heroTitle}>Bienvenue</Text>
+            <Text style={styles.heroTitle}>Leray-pointel</Text>
             <Text style={styles.heroSub}>
               Votre fournisseur de fruits & légumes frais.
             </Text>
