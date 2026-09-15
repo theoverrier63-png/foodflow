@@ -239,6 +239,7 @@ class Product(BaseModel):
     cagette_content_pieces: Optional[int] = None
     cagette_content_kg: Optional[float] = None
     season: str = "all"  # "summer" | "winter" | "all"
+    is_active: bool = True
     image_url: str
     description: str
 
@@ -465,6 +466,11 @@ async def startup():
     await db.products.update_many(
         {"subcategory": {"$exists": False}},
         {"$set": {"subcategory": None}},
+    )
+    # is_active migration (default True — existing products stay online)
+    await db.products.update_many(
+        {"is_active": {"$exists": False}},
+        {"$set": {"is_active": True}},
     )
 
     # Backfill account_type on legacy orders by joining with the user
@@ -734,7 +740,7 @@ async def reset_password(body: ResetWithTokenIn):
 
 @api.get("/products", response_model=List[Product])
 async def list_products(category: Optional[str] = None, subcategory: Optional[str] = None):
-    q = {}
+    q = {"is_active": {"$ne": False}}  # hide products explicitly disabled by the admin
     if category and category.lower() != "tous":
         q["category"] = category
     if subcategory:
@@ -755,7 +761,7 @@ async def _get_current_season() -> str:
 @api.get("/products/subcategories")
 async def subcategories(category: Optional[str] = None):
     """Return { category: [subcategories...] } grouped, ordered alphabetically."""
-    match = {"subcategory": {"$ne": None}}
+    match = {"subcategory": {"$ne": None}, "is_active": {"$ne": False}}
     if category and category.lower() != "tous":
         match["category"] = category
     pipeline = [
@@ -837,9 +843,9 @@ async def order_habits(user: dict = Depends(current_user), limit: int = 8):
     if not freq:
         return []
     ranked_ids = sorted(freq.keys(), key=lambda p: (freq[p]["orders"], freq[p]["qty"]), reverse=True)
-    # Filter by current season
+    # Filter by current season and hide deactivated products
     current = await _get_current_season()
-    q = {"id": {"$in": ranked_ids}}
+    q = {"id": {"$in": ranked_ids}, "is_active": {"$ne": False}}
     if current != "all":
         q["season"] = {"$in": ["all", current]}
     docs = await db.products.find(q, {"_id": 0}).to_list(200)
@@ -952,22 +958,54 @@ async def admin_statuses(_: dict = Depends(require_admin)):
 
 @api.post("/admin/products", response_model=Product, status_code=201)
 async def admin_create_product(body: ProductIn, _: dict = Depends(require_admin)):
-    doc = {"id": str(uuid.uuid4()), **body.resolved()}
+    doc = {"id": str(uuid.uuid4()), **body.resolved(), "is_active": True}
     await db.products.insert_one(doc)
     doc.pop("_id", None)
     return doc
 
 
-@api.put("/admin/products/{product_id}", response_model=Product)
-async def admin_update_product(product_id: str, body: ProductIn, _: dict = Depends(require_admin)):
+@api.get("/admin/products", response_model=List[Product])
+async def admin_list_products(_: dict = Depends(require_admin)):
+    """Admin view returns EVERY product, including deactivated ones."""
+    docs = await db.products.find({}, {"_id": 0}).sort("name", 1).to_list(2000)
+    # Ensure the is_active field is present in the response (safety for legacy docs)
+    for d in docs:
+        d.setdefault("is_active", True)
+    return docs
+
+
+class ProductActiveIn(BaseModel):
+    is_active: bool
+
+
+@api.patch("/admin/products/{product_id}/active", response_model=Product)
+async def admin_toggle_product_active(product_id: str, body: ProductActiveIn, _: dict = Depends(require_admin)):
     updated = await db.products.find_one_and_update(
         {"id": product_id},
-        {"$set": body.resolved()},
+        {"$set": {"is_active": bool(body.is_active)}},
         projection={"_id": 0},
         return_document=True,
     )
     if not updated:
         raise HTTPException(404, "Produit introuvable")
+    updated.setdefault("is_active", True)
+    return updated
+
+
+@api.put("/admin/products/{product_id}", response_model=Product)
+async def admin_update_product(product_id: str, body: ProductIn, _: dict = Depends(require_admin)):
+    # Preserve is_active across ProductIn updates (the form does not carry it)
+    existing = await db.products.find_one({"id": product_id}, {"_id": 0, "is_active": 1})
+    if not existing:
+        raise HTTPException(404, "Produit introuvable")
+    payload = body.resolved()
+    payload["is_active"] = existing.get("is_active", True)
+    updated = await db.products.find_one_and_update(
+        {"id": product_id},
+        {"$set": payload},
+        projection={"_id": 0},
+        return_document=True,
+    )
     return updated
 
 

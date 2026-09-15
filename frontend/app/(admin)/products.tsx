@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  Switch,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,10 +30,11 @@ export default function AdminProducts() {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const list = await api.products();
+      const list = await api.adminProducts();
       setProducts(list);
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
@@ -64,6 +66,20 @@ export default function AdminProducts() {
       toast.show(e?.message || "Suppression impossible", "error");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function toggleActive(p: Product) {
+    const next = !(p.is_active !== false);
+    try {
+      setTogglingId(p.id);
+      const updated = await api.adminSetProductActive(p.id, next);
+      setProducts((prev) => prev.map((x) => (x.id === p.id ? { ...x, ...updated } : x)));
+      toast.show(next ? "Produit remis en ligne" : "Produit retiré de la vente", next ? "success" : "info");
+    } catch (e: any) {
+      toast.show(e?.message || "Erreur", "error");
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -119,48 +135,81 @@ export default function AdminProducts() {
               <Text style={styles.emptyTxt}>Aucun produit</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <View style={styles.card} testID={`admin-product-${item.id}`}>
-              <Image
-                source={{ uri: item.image_url }}
-                style={styles.cardImg}
-                contentFit="cover"
-                transition={200}
-              />
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  {item.category} • {item.unit}
-                </Text>
-                <Text style={styles.price}>{item.price.toFixed(2)} € HT</Text>
+          renderItem={({ item }) => {
+            const active = item.is_active !== false;
+            const isToggling = togglingId === item.id;
+            return (
+              <View
+                style={[
+                  styles.card,
+                  !active && { opacity: 0.55, borderColor: colors.muted },
+                ]}
+                testID={`admin-product-${item.id}`}
+              >
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.cardImg}
+                  contentFit="cover"
+                  transition={200}
+                />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    {!active ? (
+                      <View style={styles.offPill}>
+                        <Feather name="eye-off" size={9} color={colors.error} />
+                        <Text style={styles.offPillTxt}>Retiré</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {item.category} • {item.unit}
+                  </Text>
+                  <Text style={styles.price}>{item.price.toFixed(2)} € HT</Text>
+                </View>
+                <View style={styles.actionsCol}>
+                  <View style={styles.switchWrap}>
+                    {isToggling ? (
+                      <ActivityIndicator color={colors.brandPrimary} size="small" />
+                    ) : (
+                      <Switch
+                        testID={`toggle-${item.id}`}
+                        value={active}
+                        onValueChange={() => toggleActive(item)}
+                        trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
+                        thumbColor={colors.surface}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable
+                      testID={`edit-${item.id}`}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/(admin)/product-edit",
+                          params: { id: item.id },
+                        })
+                      }
+                      hitSlop={10}
+                      style={[styles.actionBtn, { backgroundColor: colors.brandSecondary }]}
+                    >
+                      <Feather name="edit-2" size={16} color={colors.brandPrimary} />
+                    </Pressable>
+                    <Pressable
+                      testID={`delete-${item.id}`}
+                      onPress={() => setConfirmDelete(item)}
+                      hitSlop={10}
+                      style={[styles.actionBtn, { backgroundColor: "rgba(220,38,38,0.1)" }]}
+                    >
+                      <Feather name="trash-2" size={16} color={colors.error} />
+                    </Pressable>
+                  </View>
+                </View>
               </View>
-              <View style={{ gap: 6 }}>
-                <Pressable
-                  testID={`edit-${item.id}`}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(admin)/product-edit",
-                      params: { id: item.id },
-                    })
-                  }
-                  hitSlop={10}
-                  style={[styles.actionBtn, { backgroundColor: colors.brandSecondary }]}
-                >
-                  <Feather name="edit-2" size={16} color={colors.brandPrimary} />
-                </Pressable>
-                <Pressable
-                  testID={`delete-${item.id}`}
-                  onPress={() => setConfirmDelete(item)}
-                  hitSlop={10}
-                  style={[styles.actionBtn, { backgroundColor: "rgba(220,38,38,0.1)" }]}
-                >
-                  <Feather name="trash-2" size={16} color={colors.error} />
-                </Pressable>
-              </View>
-            </View>
-          )}
+            );
+          }}
         />
       )}
 
@@ -248,6 +297,25 @@ const useStyles = makeStyles((colors) => ({
   name: { fontSize: 15, fontWeight: "700", color: colors.onSurface },
   meta: { fontSize: 12, color: colors.muted },
   price: { fontSize: 14, fontWeight: "800", color: colors.brandPrimary, marginTop: 2 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  offPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(220,38,38,0.12)",
+  },
+  offPillTxt: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: colors.error,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  actionsCol: { alignItems: "flex-end", gap: 6 },
+  switchWrap: { alignItems: "flex-end", minHeight: 28, justifyContent: "center" },
   actionBtn: {
     width: 34,
     height: 34,

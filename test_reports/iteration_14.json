@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 14 (Activer/Retirer de la vente product toggle) verified end-to-end. Backend: 10/10 pytest tests passed against the deployed API — new is_active field present on every product, GET /api/admin/products returns all products (sorted alphabetically) and is admin-gated (403 for business, 401/403 for anon), PATCH /api/admin/products/{id}/active toggles the flag and is admin-only (403 for business, 404 for unknown id), deactivated products are correctly filtered out of public GET /api/products, GET /api/products/subcategories, and GET /api/orders/habits, PUT /api/admin/products/{id} preserves is_active across ProductIn saves, and POST /api/admin/products defaults is_active=True. Frontend: admin login → nav-products → 81 rows loaded with a Switch each (testID toggle-<id>); tapping OFF shows toast 'Produit retiré de la vente', row fades to ~55% opacity, red 'RETIRÉ' pill appears next to name; tapping ON shows 'Produit remis en ligne' and restores appearance. Business session confirmed the deactivated product is absent from /api/products (111 remaining), from /api/orders/habits, and search/catalog UI. Cleanup reactivated everything. No blocking issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_product_active.py",
+    "/app/test_reports/pytest/iter14_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Initial parallel pytest run showed a race between TestSubcategoriesFilter and TestCleanup (xdist reactivated the temp product mid-test). Rerun serialized cleanly; consider isolating the final cleanup test in its own file or marking with pytest-xdist grouping (@pytest.mark.xdist_group) to prevent flakiness. Not a product bug.",
+    "GET /api/admin/products returns up to 2000 products with .sort('name', 1) and no pagination — fine for current catalogue (~81 products) but worth pagination once catalogue grows past a few hundred.",
+    "admin_toggle_product_active response has updated.setdefault('is_active', True) after a successful $set — harmless but redundant since $set guarantees the key. Consider dropping the setdefault to keep the response mirror the DB truth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter14_product_active.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None persisted. Tests create ephemeral TEST_* products and delete them (or reactivate the borrowed one) in teardown; frontend test toggles 'Ail blanc' OFF and reactivates it before finishing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test suite lives in /app/backend/tests/test_iter14_product_active.py. Run with `-n 0` (or split TestCleanup into its own file) to avoid the xdist race on the final reactivate-all cleanup step. The 'Ail blanc' product id (0c9992ad-004a-4ae6-85ff-993bc35dea8c) is a stable admin-catalogue anchor for UI toggle smoke tests.",
+  "rca_of_issue": "N/A — no product bugs found. Only a test-side race: pytest-xdist's default loadscope scheduler ran TestSubcategoriesFilter and TestCleanup on parallel workers; the cleanup reactivated the temp product mid-assertion. Re-running with `-n 0` produced 10/10 passes."
+}

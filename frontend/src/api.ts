@@ -84,6 +84,7 @@ export type Product = {
   cagette_content_pieces?: number | null;
   cagette_content_kg?: number | null;
   season?: "summer" | "winter" | "all";
+  is_active?: boolean;
   image_url: string;
   description: string;
 };
@@ -151,6 +152,12 @@ export const api = {
     }),
   products: (category?: string) =>
     request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
+  adminProducts: () => request<Product[]>("/admin/products"),
+  adminSetProductActive: (id: string, is_active: boolean) =>
+    request<Product>(`/admin/products/${id}/active`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active }),
+    }),
   getProduct: (id: string) => request<Product>(`/products/${id}`),
   categories: () => request<{ categories: string[] }>("/products/categories"),
   subcategories: (category?: string) =>
