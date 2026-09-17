@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,6 +29,8 @@ type Form = {
   image_url: string;
   description: string;
   season: "summer" | "winter" | "all";
+  sell_by_kg: boolean;
+  sell_by_piece: boolean;
 };
 
 const EMPTY: Form = {
@@ -40,6 +43,8 @@ const EMPTY: Form = {
     "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=600",
   description: "",
   season: "all",
+  sell_by_kg: false,
+  sell_by_piece: true,
 };
 
 const CATEGORIES = ["Fruits", "Légumes", "Herbes"];
@@ -60,10 +65,6 @@ export default function ProductEdit() {
   const editing = !!params.id;
 
   const [form, setForm] = useState<Form>(EMPTY);
-  const [priceKgStr, setPriceKgStr] = useState("");
-  const [pricePieceStr, setPricePieceStr] = useState("");
-  const [priceKgTtcStr, setPriceKgTtcStr] = useState("");
-  const [pricePieceTtcStr, setPricePieceTtcStr] = useState("");
   const [cagetteMode, setCagetteMode] = useState<"none" | "pieces" | "kg">("none");
   const [cagetteContentStr, setCagetteContentStr] = useState("");
   const [subSuggestions, setSubSuggestions] = useState<string[]>([]);
@@ -106,11 +107,9 @@ export default function ProductEdit() {
           image_url: p.image_url,
           description: p.description,
           season: (p.season as any) ?? "all",
+          sell_by_kg: (p as any).sell_by_kg ?? (p.sell_unit === "kg"),
+          sell_by_piece: (p as any).sell_by_piece ?? (p.sell_unit !== "kg"),
         });
-        setPriceKgStr(p.price_kg != null ? String(p.price_kg) : "");
-        setPricePieceStr(p.price_piece != null ? String(p.price_piece) : "");
-        setPriceKgTtcStr(p.price_kg_ttc != null ? String(p.price_kg_ttc) : "");
-        setPricePieceTtcStr(p.price_piece_ttc != null ? String(p.price_piece_ttc) : "");
         if (p.cagette_content_pieces != null && p.cagette_content_pieces > 0) {
           setCagetteMode("pieces");
           setCagetteContentStr(String(p.cagette_content_pieces));
@@ -133,20 +132,14 @@ export default function ProductEdit() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  function parsePrice(v: string): number | null {
+  function parseFloatSafe(v: string): number | null {
     const n = parseFloat(v.replace(",", ".").trim());
     return isFinite(n) && n > 0 ? n : null;
   }
 
   async function submit() {
-    const priceKg = parsePrice(priceKgStr);
-    const pricePiece = parsePrice(pricePieceStr);
-    const priceKgTtc = parsePrice(priceKgTtcStr);
-    const pricePieceTtc = parsePrice(pricePieceTtcStr);
     if (!form.name.trim()) return toast.show("Nom requis", "error");
     if (!form.unit.trim()) return toast.show("Format requis", "error");
-    if (priceKg == null && pricePiece == null)
-      return toast.show("Saisissez au moins un prix HT (kg ou pièce)", "error");
     if (!form.image_url.trim()) return toast.show("Image requise", "error");
 
     let cagette_content_pieces: number | undefined;
@@ -155,31 +148,25 @@ export default function ProductEdit() {
       const n = parseInt(cagetteContentStr.trim(), 10);
       if (!Number.isFinite(n) || n <= 0)
         return toast.show("Nombre de pièces par cagette invalide", "error");
-      if (pricePiece == null)
-        return toast.show(
-          "Renseignez le prix HT à la pièce pour vendre en cagette",
-          "error",
-        );
+      if (!form.sell_by_piece)
+        return toast.show("Activez la vente à la pièce pour proposer une cagette en pièces", "error");
       cagette_content_pieces = n;
     } else if (cagetteMode === "kg") {
-      const n = parsePrice(cagetteContentStr);
+      const n = parseFloatSafe(cagetteContentStr);
       if (n == null)
         return toast.show("Poids par cagette invalide", "error");
-      if (priceKg == null)
-        return toast.show(
-          "Renseignez le prix HT au kilo pour vendre en cagette",
-          "error",
-        );
+      if (!form.sell_by_kg)
+        return toast.show("Activez la vente au kilo pour proposer une cagette en kg", "error");
       cagette_content_kg = n;
+    }
+
+    if (!form.sell_by_kg && !form.sell_by_piece && cagetteMode === "none") {
+      return toast.show("Sélectionnez au moins une unité de vente", "error");
     }
 
     const payload = {
       ...form,
       subcategory: form.subcategory.trim() || undefined,
-      price_kg: priceKg ?? undefined,
-      price_piece: pricePiece ?? undefined,
-      price_kg_ttc: priceKgTtc ?? undefined,
-      price_piece_ttc: pricePieceTtc ?? undefined,
       cagette_content_pieces,
       cagette_content_kg,
     };
@@ -354,75 +341,42 @@ export default function ProductEdit() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Prix HT (Pros)</Text>
+          <Text style={styles.label}>Unités de vente</Text>
           <Text style={styles.hint}>
-            Prix affichés aux comptes professionnels. Renseignez au moins un prix.
+            Cochez les unités dans lesquelles ce produit peut être commandé. Aucun prix n&apos;est demandé.
           </Text>
-          <View style={styles.row}>
-            <View style={[styles.field, { flex: 1, gap: 4 }]}>
-              <Text style={styles.subLabel}>Au kilo (€/kg)</Text>
-              <TextInput
-                testID="edit-price-kg"
-                value={priceKgStr}
-                onChangeText={setPriceKgStr}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleLabel}>
+              <Feather name="package" size={16} color={colors.brandPrimary} />
+              <Text style={styles.toggleTxt}>Vendu au kilo</Text>
             </View>
-            <View style={[styles.field, { flex: 1, gap: 4 }]}>
-              <Text style={styles.subLabel}>À la pièce (€/pce)</Text>
-              <TextInput
-                testID="edit-price-piece"
-                value={pricePieceStr}
-                onChangeText={setPricePieceStr}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </View>
+            <Switch
+              testID="toggle-kg"
+              value={form.sell_by_kg}
+              onValueChange={(v) => set("sell_by_kg", v)}
+              trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
+              thumbColor={colors.surface}
+            />
           </View>
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Prix TTC (Particuliers)</Text>
-          <Text style={styles.hint}>
-            Prix affichés aux comptes particuliers. Laissez vide pour utiliser le prix HT.
-          </Text>
-          <View style={styles.row}>
-            <View style={[styles.field, { flex: 1, gap: 4 }]}>
-              <Text style={styles.subLabel}>Au kilo (€/kg)</Text>
-              <TextInput
-                testID="edit-price-kg-ttc"
-                value={priceKgTtcStr}
-                onChangeText={setPriceKgTtcStr}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleLabel}>
+              <Feather name="box" size={16} color={colors.brandPrimary} />
+              <Text style={styles.toggleTxt}>Vendu à la pièce</Text>
             </View>
-            <View style={[styles.field, { flex: 1, gap: 4 }]}>
-              <Text style={styles.subLabel}>À la pièce (€/pce)</Text>
-              <TextInput
-                testID="edit-price-piece-ttc"
-                value={pricePieceTtcStr}
-                onChangeText={setPricePieceTtcStr}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-              />
-            </View>
+            <Switch
+              testID="toggle-piece"
+              value={form.sell_by_piece}
+              onValueChange={(v) => set("sell_by_piece", v)}
+              trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
+              thumbColor={colors.surface}
+            />
           </View>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Cagette (optionnel)</Text>
           <Text style={styles.hint}>
-            Le prix cagette est calculé automatiquement à partir du contenu et du prix unitaire.
+            Indique le contenu d&apos;une cagette. Le client pourra ensuite commander directement en cagettes.
           </Text>
           <View style={styles.chipsRow}>
             {(
@@ -643,6 +597,19 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: 999,
     borderWidth: 1,
   },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  toggleLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
+  toggleTxt: { fontSize: 14, fontWeight: "600", color: colors.onSurface },
   photoPicker: {
     flexDirection: "row",
     alignItems: "center",

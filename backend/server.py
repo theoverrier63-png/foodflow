@@ -230,12 +230,9 @@ class Product(BaseModel):
     subcategory: Optional[str] = None
     origin: str
     unit: str
-    sell_unit: str = "piece"
-    price: float
-    price_kg: Optional[float] = None
-    price_piece: Optional[float] = None
-    price_kg_ttc: Optional[float] = None
-    price_piece_ttc: Optional[float] = None
+    sell_unit: str = "piece"  # default unit (kept for backwards compat + habits sorting)
+    sell_by_kg: bool = False
+    sell_by_piece: bool = True
     cagette_content_pieces: Optional[int] = None
     cagette_content_kg: Optional[float] = None
     season: str = "all"  # "summer" | "winter" | "all"
@@ -249,7 +246,6 @@ class CartItem(BaseModel):
     name: str
     unit: str
     sell_unit: str = "piece"
-    price: float
     quantity: float
 
 
@@ -265,7 +261,6 @@ class Order(BaseModel):
     account_type: str = "business"  # "business" | "personal"
     delivery_address: str
     items: List[CartItem]
-    total: float
     status: str
     notes: str
     created_at: str
@@ -337,51 +332,51 @@ async def require_admin(user: dict = Depends(current_user)):
 
 SEED_PRODUCTS = [
     # Fruits — vendus au kg
-    {"name": "Pommes Gala", "category": "Fruits", "origin": "France", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.58,
+    {"name": "Pommes Gala", "category": "Fruits", "origin": "France", "unit": "Cagette 5kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=600",
      "description": "Pommes Gala croquantes et sucrées, catégorie Extra."},
-    {"name": "Bananes", "category": "Fruits", "origin": "Équateur", "unit": "Carton 18kg", "sell_unit": "kg", "price": 1.36,
+    {"name": "Bananes", "category": "Fruits", "origin": "Équateur", "unit": "Carton 18kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600",
      "description": "Bananes Cavendish mûrissage contrôlé."},
-    {"name": "Oranges à jus", "category": "Fruits", "origin": "Espagne", "unit": "Sac 10kg", "sell_unit": "kg", "price": 1.50,
+    {"name": "Oranges à jus", "category": "Fruits", "origin": "Espagne", "unit": "Sac 10kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1580052614034-c55d20bfee3b?w=600",
      "description": "Oranges juteuses idéales pour presser."},
-    {"name": "Fraises Gariguette", "category": "Fruits", "origin": "France", "unit": "Barquette 500g", "sell_unit": "kg", "price": 8.00,
+    {"name": "Fraises Gariguette", "category": "Fruits", "origin": "France", "unit": "Barquette 500g", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1543528176-61b239494933?w=600",
      "description": "Fraises Gariguette parfumées, saison de printemps."},
-    {"name": "Citrons jaunes", "category": "Fruits", "origin": "Italie", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.84,
+    {"name": "Citrons jaunes", "category": "Fruits", "origin": "Italie", "unit": "Cagette 5kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1587496679742-bad5f8034b8f?w=600",
      "description": "Citrons de Sicile calibre moyen."},
     # Légumes — au kg sauf salade (pièce)
-    {"name": "Tomates grappe", "category": "Légumes", "origin": "France", "unit": "Cagette 6kg", "sell_unit": "kg", "price": 3.15,
+    {"name": "Tomates grappe", "category": "Légumes", "origin": "France", "unit": "Cagette 6kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600",
      "description": "Tomates grappe rouges, mûres à point."},
-    {"name": "Pommes de terre Charlotte", "category": "Légumes", "origin": "France", "unit": "Sac 25kg", "sell_unit": "kg", "price": 0.90,
+    {"name": "Pommes de terre Charlotte", "category": "Légumes", "origin": "France", "unit": "Sac 25kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600",
      "description": "Charlotte à chair ferme, idéale pour vapeur et poêlée."},
-    {"name": "Carottes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "price": 1.10,
+    {"name": "Carottes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1445282768818-728615cc910a?w=600",
      "description": "Carottes lavées calibre 200/300g."},
-    {"name": "Courgettes", "category": "Légumes", "origin": "Maroc", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 2.76,
+    {"name": "Courgettes", "category": "Légumes", "origin": "Maroc", "unit": "Cagette 5kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1596566267081-c7cbe07850f6?w=600",
      "description": "Courgettes vertes fermes, calibre régulier."},
-    {"name": "Poivrons rouges", "category": "Légumes", "origin": "Espagne", "unit": "Cagette 5kg", "sell_unit": "kg", "price": 3.30,
+    {"name": "Poivrons rouges", "category": "Légumes", "origin": "Espagne", "unit": "Cagette 5kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=600",
      "description": "Poivrons rouges charnus."},
-    {"name": "Salade batavia", "category": "Légumes", "origin": "France", "unit": "Pièce", "sell_unit": "piece", "price": 1.20,
+    {"name": "Salade batavia", "category": "Légumes", "origin": "France", "unit": "Pièce", "sell_unit": "piece", "sell_by_kg": False, "sell_by_piece": True,
      "image_url": "https://images.unsplash.com/photo-1622206151246-c47eb45f0263?w=600",
      "description": "Batavia française, croquante."},
-    {"name": "Oignons jaunes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "price": 0.98,
+    {"name": "Oignons jaunes", "category": "Légumes", "origin": "France", "unit": "Sac 10kg", "sell_unit": "kg", "sell_by_kg": True, "sell_by_piece": False,
      "image_url": "https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=600",
      "description": "Oignons jaunes à cuire."},
     # Herbes — à la pièce (botte)
-    {"name": "Basilic frais", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.50,
+    {"name": "Basilic frais", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "sell_by_kg": False, "sell_by_piece": True,
      "image_url": "https://images.unsplash.com/photo-1618375569909-3c8616cf7733?w=600",
      "description": "Basilic frais parfumé, coupé du jour."},
-    {"name": "Persil plat", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.00,
+    {"name": "Persil plat", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "sell_by_kg": False, "sell_by_piece": True,
      "image_url": "https://images.unsplash.com/photo-1600231915711-cbc80c8d6a2b?w=600",
      "description": "Persil plat frais, aromatique."},
-    {"name": "Coriandre fraîche", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "price": 1.13,
+    {"name": "Coriandre fraîche", "category": "Herbes", "origin": "France", "unit": "Botte", "sell_unit": "piece", "sell_by_kg": False, "sell_by_piece": True,
      "image_url": "https://images.unsplash.com/photo-1611089547453-af23c98f1503?w=600",
      "description": "Coriandre fraîche pour cuisine du monde."},
 ]
@@ -430,12 +425,32 @@ async def startup():
         {"sell_unit": {"$exists": False}},
         {"$set": {"sell_unit": "piece"}},
     )
-    async for p in db.products.find({"$or": [{"price_kg": {"$exists": False}}, {"price_piece": {"$exists": False}}]}):
+    # ------------------------------------------------------------------
+    # Migration: remove ALL price fields — the app now runs without prices.
+    # ------------------------------------------------------------------
+    await db.products.update_many(
+        {},
+        {"$unset": {
+            "price": "",
+            "price_kg": "",
+            "price_piece": "",
+            "price_kg_ttc": "",
+            "price_piece_ttc": "",
+        }},
+    )
+    # Backfill sell_by_kg / sell_by_piece from legacy sell_unit
+    async for p in db.products.find(
+        {"$or": [{"sell_by_kg": {"$exists": False}}, {"sell_by_piece": {"$exists": False}}]},
+        {"id": 1, "sell_unit": 1, "cagette_content_pieces": 1, "cagette_content_kg": 1},
+    ):
         set_fields = {}
-        if "price_kg" not in p:
-            set_fields["price_kg"] = p["price"] if p.get("sell_unit") == "kg" else None
-        if "price_piece" not in p:
-            set_fields["price_piece"] = p["price"] if p.get("sell_unit") == "piece" else None
+        if "sell_by_kg" not in p:
+            set_fields["sell_by_kg"] = (p.get("sell_unit") == "kg") or bool(p.get("cagette_content_kg"))
+        if "sell_by_piece" not in p:
+            set_fields["sell_by_piece"] = (p.get("sell_unit") == "piece") or bool(p.get("cagette_content_pieces"))
+            # Fallback: at least one unit must be available
+            if not set_fields.get("sell_by_kg") and not set_fields["sell_by_piece"]:
+                set_fields["sell_by_piece"] = True
         if set_fields:
             await db.products.update_one({"id": p["id"]}, {"$set": set_fields})
 
@@ -443,15 +458,6 @@ async def startup():
     await db.products.update_many(
         {"season": {"$exists": False}},
         {"$set": {"season": "all"}},
-    )
-    # Migrate: default TTC prices to None for legacy products
-    await db.products.update_many(
-        {"price_kg_ttc": {"$exists": False}},
-        {"$set": {"price_kg_ttc": None}},
-    )
-    await db.products.update_many(
-        {"price_piece_ttc": {"$exists": False}},
-        {"$set": {"price_piece_ttc": None}},
     )
     # Cagette content migration (default None)
     await db.products.update_many(
@@ -478,6 +484,17 @@ async def startup():
         u = await db.users.find_one({"id": o.get("user_id")}, {"_id": 0, "account_type": 1})
         acc = (u or {}).get("account_type", "business")
         await db.orders.update_one({"id": o["id"]}, {"$set": {"account_type": acc}})
+
+    # ------------------------------------------------------------------
+    # Migration: strip legacy price/total fields from orders too.
+    # ------------------------------------------------------------------
+    await db.orders.update_many({}, {"$unset": {"total": "", "total_ht": "", "total_ttc": ""}})
+    # Clear price on every item inside every order
+    async for o in db.orders.find({"items.price": {"$exists": True}}, {"id": 1, "items": 1}):
+        items = o.get("items") or []
+        for it in items:
+            it.pop("price", None)
+        await db.orders.update_one({"id": o["id"]}, {"$set": {"items": items}})
 
     # Backfill token_version to 0 for legacy users (never triggers a mass logout)
     await db.users.update_many(
@@ -798,7 +815,6 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
         raise HTTPException(403, "Votre compte est en attente de validation par Leray-Pointel")
     if not body.items:
         raise HTTPException(400, "Panier vide")
-    total = round(sum(i.price * i.quantity for i in body.items), 2)
     order_id = str(uuid.uuid4())
     doc = {
         "id": order_id,
@@ -807,7 +823,6 @@ async def create_order(body: OrderCreate, user: dict = Depends(current_user)):
         "account_type": user.get("account_type", "business"),
         "delivery_address": user["delivery_address"],
         "items": [i.model_dump() for i in body.items],
-        "total": total,
         "status": "En attente",
         "notes": body.notes or "",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -873,10 +888,8 @@ class ProductIn(BaseModel):
     subcategory: Optional[str] = Field(default=None, max_length=100)
     origin: str = Field(min_length=1, max_length=100)
     unit: str = Field(min_length=1, max_length=100)
-    price_kg: Optional[float] = Field(default=None, gt=0)
-    price_piece: Optional[float] = Field(default=None, gt=0)
-    price_kg_ttc: Optional[float] = Field(default=None, gt=0)
-    price_piece_ttc: Optional[float] = Field(default=None, gt=0)
+    sell_by_kg: bool = False
+    sell_by_piece: bool = True
     cagette_content_pieces: Optional[int] = Field(default=None, gt=0)
     cagette_content_kg: Optional[float] = Field(default=None, gt=0)
     season: str = Field(default="all")
@@ -890,9 +903,9 @@ class ProductIn(BaseModel):
             raise ValueError("season doit être 'summer', 'winter' ou 'all'")
         return v
 
-    @field_validator("price_kg", "price_piece", "price_kg_ttc", "price_piece_ttc", "cagette_content_kg")
+    @field_validator("cagette_content_kg")
     @classmethod
-    def norm_prices(cls, v):
+    def norm_ck(cls, v):
         return None if v in (0, 0.0) else v
 
     @field_validator("cagette_content_pieces")
@@ -909,17 +922,23 @@ class ProductIn(BaseModel):
         return v or None
 
     def resolved(self) -> dict:
-        if self.price_kg is None and self.price_piece is None:
-            raise HTTPException(422, "Au moins un prix HT (au kilo ou à la pièce) est requis")
-        # Cagette must reference an actual base price it can compute from
-        if self.cagette_content_pieces is not None and self.price_piece is None:
-            raise HTTPException(422, "Prix à la pièce requis pour vendre en cagette (nombre de pièces)")
-        if self.cagette_content_kg is not None and self.price_kg is None:
-            raise HTTPException(422, "Prix au kilo requis pour vendre en cagette (poids)")
+        # At least one selling unit must be available
+        if not self.sell_by_kg and not self.sell_by_piece and self.cagette_content_pieces is None and self.cagette_content_kg is None:
+            raise HTTPException(422, "Sélectionnez au moins une unité de vente (kg, pièce ou cagette)")
+        # Cagette in kg requires kg to be enabled; cagette in pieces requires piece.
+        if self.cagette_content_kg is not None and not self.sell_by_kg:
+            raise HTTPException(422, "Activez la vente au kilo pour vendre en cagette (poids)")
+        if self.cagette_content_pieces is not None and not self.sell_by_piece:
+            raise HTTPException(422, "Activez la vente à la pièce pour vendre en cagette (nombre de pièces)")
         if self.cagette_content_pieces is not None and self.cagette_content_kg is not None:
             raise HTTPException(422, "La cagette doit être définie en pièces OU en kg, pas les deux")
-        sell_unit = "kg" if self.price_kg is not None else "piece"
-        price = self.price_kg if sell_unit == "kg" else self.price_piece
+        # Derive default sell_unit for UI defaults / habits sorting
+        if self.sell_by_kg:
+            sell_unit = "kg"
+        elif self.sell_by_piece:
+            sell_unit = "piece"
+        else:
+            sell_unit = "piece"
         return {
             "name": self.name.strip(),
             "category": self.category.strip(),
@@ -927,11 +946,8 @@ class ProductIn(BaseModel):
             "origin": self.origin.strip(),
             "unit": self.unit.strip(),
             "sell_unit": sell_unit,
-            "price": price,
-            "price_kg": self.price_kg,
-            "price_piece": self.price_piece,
-            "price_kg_ttc": self.price_kg_ttc,
-            "price_piece_ttc": self.price_piece_ttc,
+            "sell_by_kg": bool(self.sell_by_kg),
+            "sell_by_piece": bool(self.sell_by_piece),
             "cagette_content_pieces": self.cagette_content_pieces,
             "cagette_content_kg": self.cagette_content_kg,
             "season": self.season,
@@ -1020,7 +1036,7 @@ async def admin_delete_product(product_id: str, _: dict = Depends(require_admin)
 @api.get("/admin/orders/export")
 async def admin_export_all(_: dict = Depends(require_admin)):
     docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
-    lines = ["Numéro,Date,Client,SIRET livraison,Statut,Nb articles,Total HT"]
+    lines = ["Numéro,Date,Client,Adresse livraison,Statut,Nb articles"]
     for o in docs:
         lines.append(",".join([
             _csv_escape("#" + o["id"][:8].upper()),
@@ -1029,7 +1045,6 @@ async def admin_export_all(_: dict = Depends(require_admin)):
             _csv_escape(o["delivery_address"]),
             _csv_escape(o["status"]),
             _csv_escape(sum(i["quantity"] for i in o["items"])),
-            _csv_escape(f"{o['total']:.2f}"),
         ]))
     return {"filename": "commandes-export.csv", "content": "\n".join(lines), "count": len(docs)}
 
@@ -1085,7 +1100,7 @@ def _csv_escape(v) -> str:
 
 
 def _generate_invoice_pdf(order: dict) -> bytes:
-    """Render a printable A4 invoice PDF for a given order document."""
+    """Render a printable A4 delivery/order note (no prices) for the given order."""
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -1094,7 +1109,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
         rightMargin=18 * mm,
         topMargin=18 * mm,
         bottomMargin=18 * mm,
-        title=f"Facture {order['id'][:8].upper()}",
+        title=f"Bon de commande {order['id'][:8].upper()}",
     )
     brand = rl_colors.HexColor("#194B32")
     muted = rl_colors.HexColor("#6B7280")
@@ -1109,16 +1124,16 @@ def _generate_invoice_pdf(order: dict) -> bytes:
 
     story = []
 
-    # ---------- Header (brand + invoice meta) ----------
+    # ---------- Header (brand + doc meta) ----------
     header_data = [
         [
             Paragraph("<b>LERAY-POINTEL</b>", h1),
-            Paragraph("<b>FACTURE</b>", ParagraphStyle(
+            Paragraph("<b>BON DE COMMANDE</b>", ParagraphStyle(
                 "invTitle", parent=h1, alignment=2, fontSize=18
             )),
         ],
         [
-            Paragraph("Fruits &amp; légumes frais — vente en gros", small),
+            Paragraph("Fruits &amp; légumes frais", small),
             Paragraph(
                 f"N° {order['id'][:8].upper()}<br/>"
                 f"Date : {order['created_at'][:10]}",
@@ -1169,22 +1184,24 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     story.append(Paragraph(f"<b>Statut :</b> {escape(order['status'])}", normal))
     story.append(Spacer(1, 4 * mm))
 
-    # ---------- Products table ----------
-    items_data = [["Produit", "Format", "Qté", "PU HT (€)", "Total HT (€)"]]
+    # ---------- Products table (no prices) ----------
+    items_data = [["Produit", "Format", "Quantité"]]
+    total_units = 0.0
     for it in order["items"]:
         sell_unit = it.get("sell_unit", "piece")
         unit_label = "kg" if sell_unit == "kg" else "cag." if sell_unit == "cagette" else "pce"
-        # Format quantity: integer without trailing .0, else 2 decimals
         q = it["quantity"]
+        try:
+            total_units += float(q)
+        except Exception:
+            pass
         q_str = f"{q:.2f}".rstrip("0").rstrip(".") if isinstance(q, float) else str(q)
         items_data.append([
             escape(it["name"]),
             escape(it["unit"]),
             f"{q_str} {unit_label}",
-            f"{it['price']:.2f}/{unit_label}",
-            f"{it['price'] * q:.2f}",
         ])
-    items_table = Table(items_data, colWidths=[55 * mm, 35 * mm, 25 * mm, 25 * mm, 30 * mm])
+    items_table = Table(items_data, colWidths=[90 * mm, 50 * mm, 30 * mm])
     items_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), brand),
         ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
@@ -1203,24 +1220,16 @@ def _generate_invoice_pdf(order: dict) -> bytes:
     story.append(items_table)
     story.append(Spacer(1, 6 * mm))
 
-    # ---------- Totals ----------
-    totals_table = Table(
-        [
-            ["Total HT", f"{order['total']:.2f} €"],
-        ],
-        colWidths=[145 * mm, 25 * mm],
+    # ---------- Summary line (counts only) ----------
+    refs = len(order["items"])
+    total_units_str = (
+        f"{total_units:.2f}".rstrip("0").rstrip(".") if isinstance(total_units, float) else str(total_units)
     )
-    totals_table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 12),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-        ("TEXTCOLOR", (1, 0), (1, -1), brand),
-        ("ALIGN", (0, 0), (0, -1), "RIGHT"),
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("LINEABOVE", (0, 0), (-1, 0), 1, brand),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(totals_table)
+    summary = Paragraph(
+        f"<b>{refs}</b> référence{'s' if refs > 1 else ''} — total quantité : <b>{total_units_str}</b>",
+        normal,
+    )
+    story.append(summary)
 
     if order.get("notes"):
         story.append(Spacer(1, 6 * mm))
@@ -1229,7 +1238,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
 
     story.append(Spacer(1, 10 * mm))
     story.append(Paragraph(
-        "Paiement hors application — facturation. Merci de votre confiance.",
+        "Document interne — bon de commande / bon de livraison. Merci de votre confiance.",
         small,
     ))
 
@@ -1239,7 +1248,7 @@ def _generate_invoice_pdf(order: dict) -> bytes:
 
 def _pdf_response(order: dict) -> Response:
     pdf = _generate_invoice_pdf(order)
-    filename = f"facture-{order['id'][:8]}.pdf"
+    filename = f"bon-commande-{order['id'][:8]}.pdf"
     return Response(
         content=pdf,
         media_type="application/pdf",

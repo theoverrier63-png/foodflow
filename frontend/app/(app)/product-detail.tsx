@@ -16,15 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
-import { useAuth } from "@/src/auth-context";
-import {
-  availableUnits,
-  cagetteContentLabel,
-  priceFor,
-  priceLabelFor,
-  priceModeFor,
-  useCart,
-} from "@/src/cart-context";
+import { availableUnits, cagetteContentLabel, useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, roundQty, SellUnit, stepFor, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -37,9 +29,6 @@ export default function ProductDetail() {
   const toast = useToast();
   const params = useLocalSearchParams<{ id?: string }>();
   const { add } = useCart();
-  const { user } = useAuth();
-  const priceMode = priceModeFor(user);
-  const priceLabel = priceLabelFor(priceMode);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,9 +42,12 @@ export default function ProductDetail() {
       try {
         const p = await api.getProduct(params.id!);
         setProduct(p);
-        // Preselect the product's default unit if available, else the only one that is
         const units = availableUnits(p);
-        setSelectedUnit(units.includes(p.sell_unit) ? p.sell_unit : units[0] ?? null);
+        setSelectedUnit(
+          units.includes(p.sell_unit as SellUnit)
+            ? (p.sell_unit as SellUnit)
+            : units[0] ?? "piece",
+        );
       } catch (e: any) {
         toast.show(e?.message || "Produit introuvable", "error");
         router.back();
@@ -74,10 +66,8 @@ export default function ProductDetail() {
   }
 
   const units = availableUnits(product);
-  const price = priceFor(product, selectedUnit, priceMode) ?? 0;
   const step = stepFor(selectedUnit);
   const qNum = roundQty(parseQty(qtyStr), selectedUnit);
-  const lineTotal = Math.round(qNum * price * 100) / 100;
 
   const bumpQty = (delta: number) => {
     const next = roundQty(Math.max(0, qNum + delta), selectedUnit);
@@ -91,11 +81,10 @@ export default function ProductDetail() {
         piece: "à la pièce",
         cagette: "à la cagette",
       };
-      toast.show(`Ce produit est vendu ${labels[u]} uniquement`, "info");
+      toast.show(`Ce produit n'est pas vendu ${labels[u]}`, "info");
       return;
     }
     setSelectedUnit(u);
-    // Reset quantity to a sensible default when switching (e.g. 1)
     setQtyStr("1");
   };
 
@@ -105,7 +94,7 @@ export default function ProductDetail() {
       return;
     }
     setAdding(true);
-    add(product, qNum, selectedUnit, priceMode);
+    add(product, qNum, selectedUnit);
     toast.show(
       `${product.name} : ${formatQty(qNum)} ${unitShort(selectedUnit)} ajouté(s)`,
       "success"
@@ -158,21 +147,6 @@ export default function ProductDetail() {
             <View style={styles.dot} />
             <Text style={styles.meta}>{product.unit}</Text>
           </View>
-          {selectedUnit === "kg" ? (
-            <Text style={styles.price} testID="detail-price">
-              {price.toFixed(2)} € {priceLabel}
-              <Text style={styles.priceUnit}> / {unitLabel(selectedUnit)}</Text>
-            </Text>
-          ) : selectedUnit === "cagette" ? (
-            <Text style={styles.price} testID="detail-price-cagette">
-              {price.toFixed(2)} € {priceLabel}
-              <Text style={styles.priceUnit}> / cagette</Text>
-            </Text>
-          ) : (
-            <Text style={styles.pricePiece} testID="detail-price-piece">
-              Prix à la pièce sur devis
-            </Text>
-          )}
 
           {/* Description */}
           <View style={styles.section}>
@@ -190,8 +164,6 @@ export default function ProductDetail() {
                 testID="unit-kg"
                 icon="package"
                 label="Au kilo"
-                price={priceFor(product, "kg", priceMode)}
-                showPrice
                 active={selectedUnit === "kg"}
                 available={units.includes("kg")}
                 onPress={() => chooseUnit("kg")}
@@ -200,8 +172,6 @@ export default function ProductDetail() {
                 testID="unit-piece"
                 icon="box"
                 label="À la pièce"
-                price={priceFor(product, "piece", priceMode)}
-                showPrice={false}
                 active={selectedUnit === "piece"}
                 available={units.includes("piece")}
                 onPress={() => chooseUnit("piece")}
@@ -246,14 +216,6 @@ export default function ProductDetail() {
                     </Text>
                   </View>
                 </View>
-                <Text
-                  style={[
-                    styles.unitChipPrice,
-                    { color: selectedUnit === "cagette" ? colors.onBrandPrimary : colors.onSurface },
-                  ]}
-                >
-                  {(priceFor(product, "cagette", priceMode) ?? 0).toFixed(2)} €
-                </Text>
               </Pressable>
             ) : null}
             <Text style={styles.unitHint}>
@@ -291,7 +253,7 @@ export default function ProductDetail() {
                   style={styles.qtyInput}
                   returnKeyType="done"
                 />
-                <Text style={styles.qtyUnit}>{unitShort(selectedUnit)}</Text>
+                <Text style={styles.qtyUnit}>{unitLabel(selectedUnit, qNum)}</Text>
               </View>
               <Pressable
                 testID="qty-inc"
@@ -302,14 +264,6 @@ export default function ProductDetail() {
                 <Feather name="plus" size={18} color={colors.onSurface} />
               </Pressable>
             </View>
-            {selectedUnit !== "piece" ? (
-              <View style={styles.subtotal}>
-                <Text style={styles.subtotalLabel}>Sous-total {priceLabel}</Text>
-                <Text style={styles.subtotalVal} testID="detail-subtotal">
-                  {lineTotal.toFixed(2)} €
-                </Text>
-              </View>
-            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -320,18 +274,17 @@ export default function ProductDetail() {
           testID="detail-add-to-cart"
           onPress={handleAdd}
           disabled={adding}
-          style={({ pressed }) => [styles.cta, (pressed || adding) && { opacity: 0.85 }]}
+          style={({ pressed }) => [
+            styles.cta,
+            (pressed || adding) && { opacity: 0.85 },
+          ]}
         >
           {adding ? (
             <ActivityIndicator color={colors.onBrandPrimary} />
           ) : (
             <>
               <Feather name="shopping-cart" size={18} color={colors.onBrandPrimary} />
-              <Text style={styles.ctaTxt}>
-                {selectedUnit !== "piece"
-                  ? `Ajouter au panier • ${lineTotal.toFixed(2)} €`
-                  : "Ajouter au panier"}
-              </Text>
+              <Text style={styles.ctaTxt}>Ajouter au panier</Text>
             </>
           )}
         </Pressable>
@@ -343,8 +296,6 @@ export default function ProductDetail() {
 function UnitChip({
   icon,
   label,
-  price,
-  showPrice = true,
   active,
   available,
   onPress,
@@ -352,8 +303,6 @@ function UnitChip({
 }: {
   icon: string;
   label: string;
-  price?: number | null;
-  showPrice?: boolean;
   active: boolean;
   available: boolean;
   onPress: () => void;
@@ -371,24 +320,15 @@ function UnitChip({
         active
           ? { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }
           : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
-        !available && { opacity: 0.55 },
+        !available && { opacity: 0.45 },
         pressed && { opacity: 0.8 },
       ]}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Feather name={icon as any} size={15} color={fg} />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Feather name={icon as any} size={16} color={fg} />
         <Text style={[styles.unitChipTxt, { color: fg }]}>{label}</Text>
-        {active ? <Feather name="check" size={14} color={fg} /> : null}
       </View>
-      {showPrice ? (
-        <Text style={[styles.unitChipPrice, { color: fg }]}>
-          {available && price != null ? `${price.toFixed(2)} €` : "—"}
-        </Text>
-      ) : (
-        <Text style={[styles.unitChipPrice, { color: fg, fontSize: 11, fontWeight: "600" }]}>
-          {available ? "sur devis" : "—"}
-        </Text>
-      )}
+      {active ? <Feather name="check" size={16} color={fg} /> : null}
     </Pressable>
   );
 }
@@ -433,15 +373,6 @@ const useStyles = makeStyles((colors) => ({
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
   meta: { fontSize: 13, color: colors.muted },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.muted },
-  price: { fontSize: 22, fontWeight: "800", color: colors.brandPrimary, marginTop: 8 },
-  priceUnit: { fontSize: 14, fontWeight: "600", color: colors.muted },
-  pricePiece: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.muted,
-    marginTop: 8,
-    fontStyle: "italic",
-  },
 
   section: { marginTop: 16, gap: 10 },
   sectionTitle: {
@@ -471,17 +402,16 @@ const useStyles = makeStyles((colors) => ({
   },
   unitChip: {
     flex: 1,
-    alignItems: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: 6,
     borderWidth: 1,
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    minHeight: 62,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
   },
   unitChipTxt: { fontSize: 14, fontWeight: "700" },
-  unitChipPrice: { fontSize: 13, fontWeight: "800" },
   unitHint: { fontSize: 12, color: colors.muted, marginTop: -2 },
 
   qtyRow: {
@@ -520,18 +450,6 @@ const useStyles = makeStyles((colors) => ({
     padding: 0,
   },
   qtyUnit: { fontSize: 14, fontWeight: "700", color: colors.muted },
-
-  subtotal: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: colors.brandSecondary,
-  },
-  subtotalLabel: { fontSize: 13, fontWeight: "700", color: colors.onBrandSecondary },
-  subtotalVal: { fontSize: 20, fontWeight: "800", color: colors.brandPrimary },
 
   stickyCta: {
     position: "absolute",

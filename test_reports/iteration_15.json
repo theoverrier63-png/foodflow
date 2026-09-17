@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 15 (optional product prices) — FRONTEND verified end-to-end. Admin can save a product with all four price fields blank; product appears in the admin catalog with no error toast. On the business client catalog the price-less card correctly renders testID `quote-<id>` with the exact text 'Prix sur devis' (no € amount) and swaps the qty stepper + Ajouter for a pressable `quote-open-<id>` labeled 'Contactez-nous pour un devis' which routes to the product detail. On the detail screen `detail-price-quote` is present, the sticky `detail-add-to-cart` displays 'Contactez-nous pour un devis' and is disabled (tapping it neither navigates nor triggers any action). Editing the same product to set price_kg=2.50 restored the normal card (shows '2.50 € HT / kg', qty stepper `qty-<id>` and `add-<id>` present, `quote-<id>` gone). Clearing the price again flipped the card back to the quote state. Priced regression: 'Ail blanc' add-to-cart still works. Habits horizontal 'Sur devis' condition could not be recreated cheaply (test user has no past order on a now-price-less product) — noted as not observed, not a failure. Cleanup successful: two lingering TEST products deleted via `delete-<id>` + `confirm-delete`. Total 15/15 assertions passed, 0 failures.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iter15_frontend_test.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "product-edit.tsx removes any client-side price validation as intended, but nothing constrains price fields to numeric input on web (Playwright accepts any string). Consider keyboardType='decimal-pad' + a small onBlur numeric sanitizer to avoid weird locale entries like '2,50' being sent as-is (French comma). Currently backend accepts only the first parseable number so this is minor.",
+    "In app/(app)/index.tsx the ProductRow uses `rawPrice == null || rawPrice <= 0` to decide onQuote — a legitimate 0 € offer would be treated as a quote. Given B2B pricing this is almost certainly intentional, but flagging in case a 'free sample' scenario appears later.",
+    "The Compte/Panier/Commandes/Catalogue bottom tabs have no testID props (they're expo-router Tabs without accessibilityLabel or testID). Testing had to fall back to JS text-node walking. Adding tabBarTestID (available on RN Tabs) per screen would make E2E tests significantly more reliable.",
+    "Admin products list uses a virtualized FlatList without a search input — for the 80+ product catalogue this forces manual scrolling to reach recently created/edited products. Consider a simple search field to speed up admin flows and testing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not_tested_this_iteration", "frontend": "100%"},
+  "seed_data_creation": "Ephemeral: created 'TEST Sans Prix' product with no price, then priced it (2.50 €/kg), then cleared price, then deleted. A stale TEST Sans Prix from a previous aborted test run was also cleaned up in Step 8. No persistent data remains.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend script at /app/test_reports/iter15_frontend_test.py is a stub (the actual scripts were run inline via mcp_browser_automation). Key testIDs verified this iteration: quote-<id>, quote-open-<id>, detail-price-quote, detail-add-to-cart, edit-price-kg. For business logout inside Playwright you must click the 'Compte' bottom tab first (no testID) — see JS text-walker fallback used in the script. Admin products list is virtualized; searching by name is not available in admin UI, so scroll the [data-testid=\"admin-products-list\"] container to find recently-created rows.",
+  "rca_of_issue": "N/A — no bugs found. All expected quote-mode UI states render correctly and the priced ↔ quote transitions work in both directions."
+}

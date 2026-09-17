@@ -52,8 +52,20 @@ CSV downloads: web = blob + anchor; native = share sheet. Backend adds `role` fi
 
 ## Order Habits, Cagette Unit, Custom Screens (v4)
 - **Habitudes de commande** — approved Pros see a "Vos habitudes de commande" horizontal row on top of the catalog, listing the products they order most (`GET /api/orders/habits`). Hidden on search, other categories, personal / pending users.
-- **Cagette unit** — third sales option per product. Admin defines the content (either N pieces or X kg). Cagette price is auto-computed (content × unit price) in HT or TTC. New fields `cagette_content_pieces`, `cagette_content_kg` on products.
+- **Cagette unit** — third sales option per product. Admin defines the content (either N pieces or X kg). New fields `cagette_content_pieces`, `cagette_content_kg` on products.
 - **Login cover image** — admin uploads the hero photo of the login screen (`GET /api/login-cover` public, `PUT/DELETE /api/admin/login-cover`).
 - **Catalog watermark** — subtle logo (opacity 0.06) centered behind the catalog list. Fully touch-transparent. Endpoints: `GET /api/watermark` public + admin PUT/DELETE.
 - **Notre histoire** — editable "about" page (title + body + up to 4 photos) reachable from the catalog header. Endpoints: `GET /api/our-story` public + `PUT /api/admin/our-story`.
+
+## Price-less Catalog (v5 — current)
+- **All price fields removed** from the entire app: no price on products, no line totals in cart, no totals in order history / order detail, no revenue KPI in admin dashboard.
+- **Product model** now uses two booleans `sell_by_kg` and `sell_by_piece` to declare which units the client can select. Cagette availability derives from `cagette_content_*`.
+- **Admin product form** replaces the price inputs with two toggle switches ("Vendu au kilo" / "Vendu à la pièce") + the existing cagette section.
+- **Client**: catalog + product-detail preserve the unit selector (kg / pièce / cagette). Product cards show "Vendu au kilo / à la pièce / à la cagette" instead of a price.
+- **Cart**: shows only articles + quantities + unit. Summary line = number of articles. No total.
+- **Historique**: no line prices, no order totals.
+- **PDF**: renamed "Bon de commande" (columns Produit / Format / Quantité, no prices, no totals).
+- **CSV export**: "Total HT" column removed.
+- **Migration**: idempotent startup migration `$unset` legacy `price*`, `total*` fields on products and orders + backfills `sell_by_kg` / `sell_by_piece` from previous `sell_unit`.
+
 

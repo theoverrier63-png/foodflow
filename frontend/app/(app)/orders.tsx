@@ -48,9 +48,9 @@ export default function Orders() {
     try {
       await downloadAuthedFile(
         api.customerInvoice(order.id),
-        `facture-${order.id.slice(0, 8)}.pdf`,
+        `bon-commande-${order.id.slice(0, 8)}.pdf`,
       );
-      toast.show("Facture téléchargée", "success");
+      toast.show("Bon de commande téléchargé", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
     }
@@ -155,9 +155,6 @@ export default function Orders() {
                     <Text style={styles.itemName} numberOfLines={1}>
                       {it.name}
                     </Text>
-                    <Text style={styles.itemPrice}>
-                      {(it.price * it.quantity).toFixed(2)} €
-                    </Text>
                   </View>
                 ))}
                 {item.items.length > 3 && (
@@ -165,8 +162,20 @@ export default function Orders() {
                 )}
                 <View style={styles.divider} />
                 <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Total HT</Text>
-                  <Text style={styles.totalVal}>{item.total.toFixed(2)} €</Text>
+                  <Text style={styles.totalLabel}>
+                    {item.items.length} produit{item.items.length > 1 ? "s" : ""}
+                  </Text>
+                  <Pressable
+                    testID={`invoice-${item.id}`}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      downloadInvoice(item);
+                    }}
+                    style={styles.invoiceBtn}
+                  >
+                    <Feather name="download" size={12} color={colors.brandPrimary} />
+                    <Text style={styles.invoiceTxt}>Bon PDF</Text>
+                  </Pressable>
                 </View>
               </View>
             );

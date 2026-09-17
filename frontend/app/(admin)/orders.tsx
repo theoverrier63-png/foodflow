@@ -109,9 +109,9 @@ export default function AdminOrders() {
     try {
       await downloadAuthedFile(
         api.adminInvoice(order.id),
-        `facture-${order.id.slice(0, 8)}.pdf`,
+        `bon-commande-${order.id.slice(0, 8)}.pdf`,
       );
-      toast.show("Facture téléchargée", "success");
+      toast.show("Bon de commande téléchargé", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
     }
@@ -329,8 +329,7 @@ export default function AdminOrders() {
                 <View style={styles.divider} />
                 <View style={styles.footer}>
                   <Text style={styles.itemsCount}>
-                    {item.items.length} produit{item.items.length > 1 ? "s" : ""} •{" "}
-                    <Text style={styles.total}>{item.total.toFixed(2)} €</Text>
+                    {item.items.length} produit{item.items.length > 1 ? "s" : ""}
                   </Text>
                   <Pressable
                     testID={`invoice-${item.id}`}
@@ -341,7 +340,7 @@ export default function AdminOrders() {
                     style={styles.invoiceBtn}
                   >
                     <Feather name="download" size={14} color={colors.brandPrimary} />
-                    <Text style={styles.invoiceTxt}>Facture PDF</Text>
+                    <Text style={styles.invoiceTxt}>Bon PDF</Text>
                   </Pressable>
                 </View>
               </Pressable>

@@ -26,7 +26,7 @@ export default function Cart() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { items, inc, dec, remove, setQty, total, clear } = useCart();
+  const { items, inc, dec, remove, setQty, clear } = useCart();
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
@@ -115,12 +115,12 @@ export default function Cart() {
           <View style={[styles.summary, { paddingBottom: insets.bottom + 12 }]}>
             <View style={styles.notice}>
               <Feather name="info" size={14} color={colors.onBrandSecondary} />
-              <Text style={styles.noticeTxt}>Paiement hors application (facturation)</Text>
+              <Text style={styles.noticeTxt}>Facturation en dehors de l&apos;application</Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total HT</Text>
+              <Text style={styles.totalLabel}>Articles</Text>
               <Text style={styles.totalVal} testID="cart-total">
-                {total.toFixed(2)} €
+                {items.length}
               </Text>
             </View>
             <Pressable
@@ -179,7 +179,7 @@ function CartRow({
             {item.name}
           </Text>
           <Text style={styles.rowMeta} numberOfLines={1}>
-            {item.price.toFixed(2)} € / {unitShort(item.sell_unit)} • {item.unit}
+            Vendu {unitShort(item.sell_unit) === "kg" ? "au kilo" : unitShort(item.sell_unit) === "cag." ? "à la cagette" : "à la pièce"} • {item.unit}
           </Text>
         </View>
         <Pressable
@@ -225,9 +225,6 @@ function CartRow({
             <Feather name="plus" size={16} color={colors.onSurface} />
           </Pressable>
         </View>
-        <Text style={styles.rowLineTotal}>
-          {(item.price * item.quantity).toFixed(2)} €
-        </Text>
       </View>
     </View>
   );

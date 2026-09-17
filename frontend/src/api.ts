@@ -76,11 +76,8 @@ export type Product = {
   origin: string;
   unit: string;
   sell_unit: "kg" | "piece";
-  price: number;
-  price_kg?: number | null;
-  price_piece?: number | null;
-  price_kg_ttc?: number | null;
-  price_piece_ttc?: number | null;
+  sell_by_kg?: boolean;
+  sell_by_piece?: boolean;
   cagette_content_pieces?: number | null;
   cagette_content_kg?: number | null;
   season?: "summer" | "winter" | "all";
@@ -94,7 +91,6 @@ export type CartItem = {
   name: string;
   unit: string;
   sell_unit: "kg" | "piece" | "cagette";
-  price: number;
   quantity: number;
 };
 
@@ -105,7 +101,6 @@ export type Order = {
   account_type?: "business" | "personal";
   delivery_address: string;
   items: CartItem[];
-  total: number;
   status: string;
   notes: string;
   created_at: string;
@@ -174,9 +169,9 @@ export const api = {
 
   // ============ Admin ============
   adminStatuses: () => request<{ statuses: string[] }>("/admin/statuses"),
-  adminCreateProduct: (body: Omit<Product, "id" | "sell_unit" | "price">) =>
+  adminCreateProduct: (body: Omit<Product, "id" | "sell_unit">) =>
     request<Product>("/admin/products", { method: "POST", body: JSON.stringify(body) }),
-  adminUpdateProduct: (id: string, body: Omit<Product, "id" | "sell_unit" | "price">) =>
+  adminUpdateProduct: (id: string, body: Omit<Product, "id" | "sell_unit">) =>
     request<Product>(`/admin/products/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   adminDeleteProduct: (id: string) =>
     request<void>(`/admin/products/${id}`, { method: "DELETE" }),

@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 16 backend-only validation of complete price removal. All 14 pytest tests passed (100%). Products list, admin product CRUD (create/update/validators), orders create+list, admin PDF 'Bon de commande', and admin CSV export are all price-free and behave as specified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter16_no_prices.py",
+    "/app/test_reports/pytest/iter16_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1529 lines — consider splitting into routers (products/orders/admin/auth) to stay under the 700-line guideline.",
+    "CartItem model silently accepts extra fields (e.g. 'price') without raising; harmless because Pydantic default drops them, but adding `model_config = ConfigDict(extra='ignore')` explicitly would document the intent.",
+    "seed count check: on a non-empty DB we can only assert >=15; production seed correctness for an EMPTY DB was not directly re-run (would require dropping products). Migration $unset was verified indirectly by asserting no price* key on any current /api/products response."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested"},
+  "seed_data_creation": "Created TEST_-prefixed products via /api/admin/products then cleaned them up in the same test class. Created two TEST_ orders on client account; these remain in the DB (order deletion endpoint not available).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All price-related fields (price, price_kg, price_piece, price_kg_ttc, price_piece_ttc, tva_rate, total, total_ttc) are absent from /api/products, /api/admin/products, /api/orders, order items and the CSV header. PDF endpoint returns a real %PDF-1.x file >1KB. Product validators enforce: at least one selling unit; cagette_content_kg requires sell_by_kg; cagette_content_pieces requires sell_by_piece. Frontend not tested (per instructions).",
+  "rca_of_issue": "N/A — no bugs found."
+}

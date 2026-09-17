@@ -76,7 +76,6 @@ export default function AdminDashboard() {
   const stats = {
     total: orders.length,
     pending: orders.filter((o) => o.status === "En attente").length,
-    revenue: orders.reduce((a, o) => a + o.total, 0),
   };
 
   return (
@@ -121,17 +120,6 @@ export default function AdminDashboard() {
             <Text style={[styles.kpiLabel, { color: colors.onBrandTertiary }]}>En attente</Text>
           </View>
         </View>
-        <View style={styles.revenueCard}>
-          <View>
-            <Text style={styles.revenueLabel}>Chiffre d'affaires HT</Text>
-            <Text style={styles.revenueValue} testID="kpi-revenue">
-              {loading ? "—" : `${stats.revenue.toFixed(2)} €`}
-            </Text>
-          </View>
-          <View style={styles.revenueIcon}>
-            <Feather name="trending-up" size={22} color={colors.onBrandPrimary} />
-          </View>
-        </View>
 
         {/* Quick actions */}
         <Text style={styles.sectionTitle}>Gestion</Text>
@@ -139,7 +127,7 @@ export default function AdminDashboard() {
           testID="nav-orders"
           icon="clipboard"
           title="Commandes"
-          subtitle="Gérer les statuts et générer les factures"
+          subtitle="Gérer les statuts et générer les bons de commande"
           badgeCount={unreadCount}
           onPress={() => {
             markAllSeen();

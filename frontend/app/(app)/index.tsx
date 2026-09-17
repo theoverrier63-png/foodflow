@@ -16,7 +16,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 import { api, Product } from "@/src/api";
 import { useAuth } from "@/src/auth-context";
-import { priceFor, priceLabelFor, priceModeFor, useCart } from "@/src/cart-context";
+import { availableUnits, useCart } from "@/src/cart-context";
 import { useToast } from "@/src/toast";
 import { formatQty, parseQty, roundQty, unitLabel, unitShort } from "@/src/units";
 import { makeStyles, useTheme } from "@/src/theme";
@@ -307,7 +307,8 @@ export default function Catalog() {
                     contentContainerStyle={styles.habitsRow}
                   >
                     {habits.map((p) => {
-                      const dp = priceFor(p, p.sell_unit, priceModeFor(user)) ?? p.price;
+                      const units = availableUnits(p);
+                      const defaultUnit = units[0] ?? "piece";
                       return (
                         <Pressable
                           key={p.id}
@@ -332,18 +333,17 @@ export default function Catalog() {
                           <Text style={styles.habitName} numberOfLines={1}>
                             {p.name}
                           </Text>
-                          <Text style={styles.habitPrice}>
-                            {dp.toFixed(2)} € {priceLabelFor(priceModeFor(user))}
+                          <Text style={styles.habitUnit} numberOfLines={1}>
+                            {p.unit}
                           </Text>
                           <Pressable
                             testID={`habit-add-${p.id}`}
                             hitSlop={8}
                             onPress={(e) => {
                               e.stopPropagation?.();
-                              const step = p.sell_unit === "kg" ? 1 : 1;
-                              add(p, step, undefined, priceModeFor(user));
+                              add(p, 1, defaultUnit);
                               toast.show(
-                                `${p.name} ajouté (${step} ${unitShort(p.sell_unit)})`,
+                                `${p.name} ajouté (1 ${unitShort(defaultUnit)})`,
                                 "success"
                               );
                             }}
@@ -367,17 +367,16 @@ export default function Catalog() {
             renderItem={({ item }) => (
               <ProductRow
                 product={item}
-                priceMode={priceModeFor(user)}
                 onOpen={() =>
                   router.push({
                     pathname: "/(app)/product-detail",
                     params: { id: item.id },
                   })
                 }
-                onAdd={(q) => {
-                  add(item, q, undefined, priceModeFor(user));
+                onAdd={(q, unit) => {
+                  add(item, q, unit);
                   toast.show(
-                    `${item.name} ajouté (${formatQty(q)} ${unitShort(item.sell_unit)})`,
+                    `${item.name} ajouté (${formatQty(q)} ${unitShort(unit)})`,
                     "success"
                   );
                 }}
@@ -392,26 +391,30 @@ export default function Catalog() {
 
 function ProductRow({
   product,
-  priceMode,
   onAdd,
   onOpen,
 }: {
   product: Product;
-  priceMode: "ht" | "ttc";
-  onAdd: (quantity: number) => void;
+  onAdd: (quantity: number, unit: "kg" | "piece" | "cagette") => void;
   onOpen: () => void;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const [qtyStr, setQtyStr] = React.useState(product.sell_unit === "kg" ? "1" : "1");
-  const displayPrice = priceFor(product, product.sell_unit, priceMode) ?? product.price;
+  const units = availableUnits(product);
+  const defaultUnit = units[0] ?? "piece";
+  const [qtyStr, setQtyStr] = React.useState("1");
 
   const submit = () => {
-    const q = roundQty(parseQty(qtyStr), product.sell_unit);
+    const q = roundQty(parseQty(qtyStr), defaultUnit);
     if (q <= 0) return;
-    onAdd(q);
-    setQtyStr(product.sell_unit === "kg" ? "1" : "1");
+    onAdd(q, defaultUnit);
+    setQtyStr("1");
   };
+
+  const unitsLabel =
+    units.length > 1
+      ? units.map((u) => unitLabel(u)).join(" / ")
+      : unitLabel(defaultUnit);
 
   return (
     <View style={styles.card} testID={`product-card-${product.id}`}>
@@ -436,9 +439,8 @@ function ProductRow({
             <View style={styles.dot} />
             <Text style={styles.cardMeta}>{product.unit}</Text>
           </View>
-          <Text style={styles.cardPrice}>
-            {displayPrice.toFixed(2)} € {priceLabelFor(priceMode)}
-            <Text style={styles.cardPriceUnit}> / {unitLabel(product.sell_unit)}</Text>
+          <Text style={styles.cardUnits} numberOfLines={1}>
+            Vendu {unitsLabel}
           </Text>
         </View>
         <Feather name="chevron-right" size={18} color={colors.muted} />
@@ -450,13 +452,13 @@ function ProductRow({
             testID={`qty-${product.id}`}
             value={qtyStr}
             onChangeText={setQtyStr}
-            keyboardType={product.sell_unit === "kg" ? "decimal-pad" : "number-pad"}
+            keyboardType={defaultUnit === "kg" ? "decimal-pad" : "number-pad"}
             selectTextOnFocus
             style={styles.qtyInput}
             onSubmitEditing={submit}
             returnKeyType="done"
           />
-          <Text style={styles.qtyUnit}>{unitShort(product.sell_unit)}</Text>
+          <Text style={styles.qtyUnit}>{unitShort(defaultUnit)}</Text>
         </View>
         <Pressable
           testID={`add-${product.id}`}
@@ -605,7 +607,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceTertiary,
   },
   habitName: { fontSize: 13, fontWeight: "700", color: colors.onSurface },
-  habitPrice: { fontSize: 12, fontWeight: "800", color: colors.brandPrimary },
+  habitUnit: { fontSize: 11, color: colors.muted, fontWeight: "600" },
   habitAdd: {
     flexDirection: "row",
     alignItems: "center",
@@ -648,8 +650,12 @@ const useStyles = makeStyles((colors) => ({
   cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   cardMeta: { fontSize: 12, color: colors.muted },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.muted },
-  cardPrice: { fontSize: 15, fontWeight: "800", color: colors.brandPrimary, marginTop: 2 },
-  cardPriceUnit: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  cardUnits: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.brandPrimary,
+    marginTop: 2,
+  },
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",

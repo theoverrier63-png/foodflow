@@ -167,7 +167,6 @@ export default function AdminProducts() {
                   <Text style={styles.meta} numberOfLines={1}>
                     {item.category} • {item.unit}
                   </Text>
-                  <Text style={styles.price}>{item.price.toFixed(2)} € HT</Text>
                 </View>
                 <View style={styles.actionsCol}>
                   <View style={styles.switchWrap}>

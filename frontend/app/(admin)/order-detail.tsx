@@ -92,9 +92,9 @@ export default function AdminOrderDetail() {
     try {
       await downloadAuthedFile(
         api.adminInvoice(order.id),
-        `facture-${order.id.slice(0, 8)}.pdf`,
+        `bon-commande-${order.id.slice(0, 8)}.pdf`,
       );
-      toast.show("Facture téléchargée", "success");
+      toast.show("Bon de commande téléchargé", "success");
     } catch (e: any) {
       toast.show(e?.message || "Erreur", "error");
     }
@@ -105,7 +105,7 @@ export default function AdminOrderDetail() {
     try {
       await printAuthedPdf(
         api.adminInvoice(order.id),
-        `facture-${order.id.slice(0, 8)}.pdf`,
+        `bon-commande-${order.id.slice(0, 8)}.pdf`,
       );
       toast.show("Envoi à l'impression…", "info");
     } catch (e: any) {
@@ -207,9 +207,7 @@ export default function AdminOrderDetail() {
             {/* Table header */}
             <View style={styles.tableHead}>
               <Text style={[styles.thTxt, { flex: 1 }]}>Produit</Text>
-              <Text style={[styles.thTxt, { width: 56, textAlign: "center" }]}>Qté</Text>
-              <Text style={[styles.thTxt, { width: 74, textAlign: "right" }]}>PU HT</Text>
-              <Text style={[styles.thTxt, { width: 74, textAlign: "right" }]}>Total</Text>
+              <Text style={[styles.thTxt, { width: 90, textAlign: "right" }]}>Quantité</Text>
             </View>
             {order.items.map((it, idx) => (
               <View
@@ -233,33 +231,20 @@ export default function AdminOrderDetail() {
                     {formatQty(it.quantity)} {unitShort(it.sell_unit)}
                   </Text>
                 </View>
-                <Text style={styles.priceCell}>
-                  {it.price.toFixed(2)}€/{unitShort(it.sell_unit)}
-                </Text>
-                <Text style={styles.lineTotal}>
-                  {(it.price * it.quantity).toFixed(2)} €
-                </Text>
               </View>
             ))}
           </View>
         </View>
 
-        {/* Totals */}
+        {/* Summary */}
         <View style={styles.totalsCard}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Nombre d'unités</Text>
-            <Text style={styles.totalMuted}>{totalItems}</Text>
-          </View>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Références</Text>
             <Text style={styles.totalMuted}>{order.items.length}</Text>
           </View>
-          <View style={styles.hairline} />
           <View style={styles.totalRow}>
-            <Text style={styles.totalGrandLabel}>Total HT</Text>
-            <Text style={styles.totalGrandVal} testID="detail-total">
-              {order.total.toFixed(2)} €
-            </Text>
+            <Text style={styles.totalLabel}>Total unités</Text>
+            <Text style={styles.totalMuted} testID="detail-total">{formatQty(totalItems)}</Text>
           </View>
         </View>
 
@@ -289,7 +274,7 @@ export default function AdminOrderDetail() {
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
         >
           <Feather name="download" size={18} color={colors.onBrandPrimary} />
-          <Text style={styles.ctaTxt}>Télécharger le PDF</Text>
+          <Text style={styles.ctaTxt}>Télécharger le bon</Text>
         </Pressable>
       </View>
 
