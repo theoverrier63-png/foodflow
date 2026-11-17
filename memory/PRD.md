@@ -57,15 +57,28 @@ CSV downloads: web = blob + anchor; native = share sheet. Backend adds `role` fi
 - **Catalog watermark** — subtle logo (opacity 0.06) centered behind the catalog list. Fully touch-transparent. Endpoints: `GET /api/watermark` public + admin PUT/DELETE.
 - **Notre histoire** — editable "about" page (title + body + up to 4 photos) reachable from the catalog header. Endpoints: `GET /api/our-story` public + `PUT /api/admin/our-story`.
 
-## Price-less Catalog (v5 — current)
-- **All price fields removed** from the entire app: no price on products, no line totals in cart, no totals in order history / order detail, no revenue KPI in admin dashboard.
-- **Product model** now uses two booleans `sell_by_kg` and `sell_by_piece` to declare which units the client can select. Cagette availability derives from `cagette_content_*`.
-- **Admin product form** replaces the price inputs with two toggle switches ("Vendu au kilo" / "Vendu à la pièce") + the existing cagette section.
-- **Client**: catalog + product-detail preserve the unit selector (kg / pièce / cagette). Product cards show "Vendu au kilo / à la pièce / à la cagette" instead of a price.
-- **Cart**: shows only articles + quantities + unit. Summary line = number of articles. No total.
-- **Historique**: no line prices, no order totals.
-- **PDF**: renamed "Bon de commande" (columns Produit / Format / Quantité, no prices, no totals).
-- **CSV export**: "Total HT" column removed.
-- **Migration**: idempotent startup migration `$unset` legacy `price*`, `total*` fields on products and orders + backfills `sell_by_kg` / `sell_by_piece` from previous `sell_unit`.
+## Price-less Catalog (v5)
+- **All price fields removed** from the entire app.
+- **Product model** uses booleans `sell_by_kg`/`sell_by_piece` + optional cagette content.
+- **Admin product form** replaces price inputs with toggles.
+- **PDF**: renamed "Bon de commande".
+- **Migration**: idempotent startup migration strips legacy price/total fields.
+
+## Full Web Rewrite (v6 — current)
+- **Stack entirely rewritten** from Expo + React Native to **pure React web** (Vite + React + TypeScript + Tailwind CSS + React Router). No more Expo, Expo Router, React Native, Metro.
+- **Deployment target**: browser only (desktop + mobile responsive). Native mobile builds (iOS / Android / Play Store / App Store) abandoned per user request.
+- **Supervisor** program `expo` now runs `yarn dev` (Vite) on port 3000.
+- **Desktop UI**:
+  - 4-column catalog grid (`grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`).
+  - Rich header with brand logo + nav items + cart button + admin shortcut.
+  - **Admin console with permanent sidebar** on `lg` screens (Dashboard / Commandes / Catalogue / Clients Pro / Validations / Paramètres).
+  - **Cart side drawer** that slides in from the right on any screen.
+- **Mobile UI**: collapsible hamburger menu, single-column grid, scrollable admin chip-bar.
+- **Auth storage**: `localStorage` (replaces `expo-secure-store`).
+- **Routing**: React Router with protected routes for authenticated / admin pages.
+- **Icons**: `lucide-react` (replaces `@react-native-vector-icons/feather`).
+- **Dependencies**: `react`, `react-dom`, `react-router-dom`, `lucide-react`, `clsx`, `tailwindcss`, `vite`.
+- **Backend unchanged**: all `/api/*` endpoints continue to work without modification.
+
 
 

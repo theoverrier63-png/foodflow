@@ -1,43 +1,54 @@
-// Display + parsing helpers for the "kg" / "piece" / "cagette" sell unit.
+import { Product, SellUnit } from "./api";
 
-export type SellUnit = "kg" | "piece" | "cagette";
-
-export function unitLabel(sellUnit: SellUnit, quantity = 1): string {
-  if (sellUnit === "kg") return "kg";
-  if (sellUnit === "cagette") return quantity > 1 ? "cagettes" : "cagette";
-  return quantity > 1 ? "pièces" : "pièce";
+export function unitLabel(u: SellUnit, qty?: number): string {
+  if (u === "kg") return "kg";
+  if (u === "cagette") return (qty ?? 1) > 1 ? "cagettes" : "cagette";
+  return (qty ?? 1) > 1 ? "pièces" : "pièce";
 }
 
-// Short version used in tight spots (cart / catalog price line).
-export function unitShort(sellUnit: SellUnit): string {
-  if (sellUnit === "kg") return "kg";
-  if (sellUnit === "cagette") return "cag.";
+export function unitShort(u: SellUnit): string {
+  if (u === "kg") return "kg";
+  if (u === "cagette") return "cag.";
   return "pce";
 }
 
-// Format a number as a French-locale quantity like "2,5" or "3".
-export function formatQty(q: number): string {
-  const rounded = Math.round(q * 1000) / 1000;
-  return Number.isInteger(rounded)
-    ? String(rounded)
-    : rounded.toFixed(rounded.toString().split(".")[1]?.length > 2 ? 2 : 1).replace(".", ",");
+export function stepFor(u: SellUnit): number {
+  return u === "kg" ? 0.5 : 1;
 }
 
-// Parse a user-typed quantity that may use "," instead of "." (French keyboards).
-export function parseQty(raw: string): number {
-  if (!raw) return 0;
-  const n = parseFloat(raw.replace(",", ".").trim());
-  return isFinite(n) && n > 0 ? n : 0;
+export function parseQty(v: string): number {
+  const n = parseFloat(v.replace(",", ".").trim());
+  return isFinite(n) ? n : 0;
 }
 
-// Default increment/decrement step depending on the unit.
-export function stepFor(sellUnit: SellUnit): number {
-  return sellUnit === "kg" ? 0.5 : 1;
-}
-
-// Round to a sane precision for the unit.
-export function roundQty(q: number, sellUnit: SellUnit): number {
-  if (sellUnit === "kg") return Math.max(0, Math.round(q * 100) / 100);
-  // piece + cagette are integer quantities
+export function roundQty(q: number, u: SellUnit): number {
+  if (u === "kg") return Math.max(0, Math.round(q * 2) / 2);
   return Math.max(0, Math.round(q));
+}
+
+export function formatQty(q: number): string {
+  const n = Number(q);
+  if (!isFinite(n)) return "0";
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(2).replace(/\.?0+$/, "").replace(".", ",");
+}
+
+export function availableUnits(product: Product): SellUnit[] {
+  const units: SellUnit[] = [];
+  if (product.sell_by_kg) units.push("kg");
+  if (product.sell_by_piece) units.push("piece");
+  const hasCagette =
+    (product.cagette_content_pieces != null && product.cagette_content_pieces > 0) ||
+    (product.cagette_content_kg != null && product.cagette_content_kg > 0);
+  if (hasCagette) units.push("cagette");
+  if (units.length === 0) units.push((product.sell_unit as SellUnit) || "piece");
+  return units;
+}
+
+export function cagetteContentLabel(product: Product): string | null {
+  if (product.cagette_content_pieces != null && product.cagette_content_pieces > 0)
+    return `${product.cagette_content_pieces} pce / cagette`;
+  if (product.cagette_content_kg != null && product.cagette_content_kg > 0)
+    return `${product.cagette_content_kg} kg / cagette`;
+  return null;
 }

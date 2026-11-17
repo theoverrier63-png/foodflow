@@ -1,42 +1,28 @@
-import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
-
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+const BASE = import.meta.env.VITE_BACKEND_URL || "";
 const TOKEN_KEY = "lp_token";
 
-export async function getToken(): Promise<string | null> {
-  if (Platform.OS === "web") {
-    try {
-      return typeof window !== "undefined" ? window.localStorage.getItem(TOKEN_KEY) : null;
-    } catch {
-      return null;
-    }
+export function getToken(): string | null {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
   }
-  return SecureStore.getItemAsync(TOKEN_KEY);
 }
 
-export async function saveToken(token: string) {
-  if (Platform.OS === "web") {
-    try {
-      window.localStorage.setItem(TOKEN_KEY, token);
-    } catch {}
-    return;
-  }
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+export function saveToken(token: string) {
+  try {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } catch {}
 }
 
-export async function clearToken() {
-  if (Platform.OS === "web") {
-    try {
-      window.localStorage.removeItem(TOKEN_KEY);
-    } catch {}
-    return;
-  }
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+export function clearToken() {
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+  } catch {}
 }
 
 async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = await getToken();
+  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined),
@@ -54,6 +40,23 @@ async function request<T = any>(path: string, options: RequestInit = {}): Promis
     throw new Error(msg);
   }
   return data as T;
+}
+
+export async function downloadAuthedFile(apiPath: string, filename: string) {
+  const token = getToken();
+  const res = await fetch(`${BASE}/api${apiPath}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Téléchargement impossible");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 export type User = {
@@ -86,11 +89,13 @@ export type Product = {
   description: string;
 };
 
+export type SellUnit = "kg" | "piece" | "cagette";
+
 export type CartItem = {
   product_id: string;
   name: string;
   unit: string;
-  sell_unit: "kg" | "piece" | "cagette";
+  sell_unit: SellUnit;
   quantity: number;
 };
 
@@ -114,20 +119,22 @@ export const api = {
     phone: string;
     delivery_address: string;
     password: string;
-  }) => request<{ access_token: string | null; user: User | null }>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
+  }) =>
+    request<{ access_token: string | null; user: User | null }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   registerPersonal: (body: {
     full_name: string;
     email: string;
     phone: string;
     delivery_address: string;
     password: string;
-  }) => request<{ access_token: string | null; user: User | null }>("/auth/register-personal", {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
+  }) =>
+    request<{ access_token: string | null; user: User | null }>("/auth/register-personal", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   login: (email: string, password: string) =>
     request<{ access_token: string; user: User }>("/auth/login", {
       method: "POST",
@@ -146,7 +153,9 @@ export const api = {
       body: JSON.stringify({ token, password }),
     }),
   products: (category?: string) =>
-    request<Product[]>(`/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`),
+    request<Product[]>(
+      `/products${category && category !== "Tous" ? `?category=${encodeURIComponent(category)}` : ""}`,
+    ),
   adminProducts: () => request<Product[]>("/admin/products"),
   adminSetProductActive: (id: string, is_active: boolean) =>
     request<Product>(`/admin/products/${id}/active`, {
@@ -170,40 +179,40 @@ export const api = {
   // ============ Admin ============
   adminStatuses: () => request<{ statuses: string[] }>("/admin/statuses"),
   adminCreateProduct: (body: Omit<Product, "id" | "sell_unit">) =>
-    request<Product>("/admin/products", { method: "POST", body: JSON.stringify(body) }),
+    request<Product>("/admin/products", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   adminUpdateProduct: (id: string, body: Omit<Product, "id" | "sell_unit">) =>
-    request<Product>(`/admin/products/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    request<Product>(`/admin/products/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   adminDeleteProduct: (id: string) =>
     request<void>(`/admin/products/${id}`, { method: "DELETE" }),
   adminOrders: (accountType?: "business" | "personal") =>
-    request<Order[]>(
-      `/admin/orders${accountType ? `?account_type=${accountType}` : ""}`,
-    ),
-  adminLatestOrder: () =>
-    request<{ latest_created_at: string | null; total: number }>(
-      "/admin/orders-latest",
-    ),
+    request<Order[]>(`/admin/orders${accountType ? `?account_type=${accountType}` : ""}`),
   adminGetOrder: (id: string) => request<Order>(`/admin/orders/${id}`),
   adminUpdateStatus: (id: string, status: string) =>
-    request<Order>(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
-  adminInvoice: (id: string) =>
-    `/admin/orders/${id}/invoice`,
+    request<Order>(`/admin/orders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+  adminInvoice: (id: string) => `/admin/orders/${id}/invoice`,
   customerInvoice: (id: string) => `/orders/${id}/invoice-pdf`,
   adminExportAll: () =>
     request<{ filename: string; content: string; count: number }>("/admin/orders/export"),
   adminPending: () => request<User[]>("/admin/pending"),
-  adminApprove: (id: string) =>
-    request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
-  adminReject: (id: string) =>
-    request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
+  adminApprove: (id: string) => request<User>(`/admin/pending/${id}/approve`, { method: "POST" }),
+  adminReject: (id: string) => request<User>(`/admin/pending/${id}/reject`, { method: "POST" }),
   adminBusinessUsers: () =>
     request<Array<User & { created_at?: string | null }>>("/admin/users"),
   adminRevokeUser: (id: string) =>
     request<User>(`/admin/users/${id}/revoke`, { method: "POST" }),
   adminRestoreUser: (id: string) =>
     request<User>(`/admin/users/${id}/restore`, { method: "POST" }),
-  adminDeleteUser: (id: string) =>
-    request<void>(`/admin/users/${id}`, { method: "DELETE" }),
+  adminDeleteUser: (id: string) => request<void>(`/admin/users/${id}`, { method: "DELETE" }),
+
   getBanner: () => request<{ image_url: string | null }>("/banner"),
   setBanner: (image_url: string) =>
     request<{ image_url: string }>("/admin/banner", {
@@ -212,7 +221,6 @@ export const api = {
     }),
   deleteBanner: () => request<void>("/admin/banner", { method: "DELETE" }),
 
-  // ============ Login cover image ============
   getLoginCover: () => request<{ image_url: string | null }>("/login-cover"),
   setLoginCover: (image_url: string) =>
     request<{ image_url: string }>("/admin/login-cover", {
@@ -221,16 +229,6 @@ export const api = {
     }),
   deleteLoginCover: () => request<void>("/admin/login-cover", { method: "DELETE" }),
 
-  // ============ Catalog watermark ============
-  getWatermark: () => request<{ image_url: string | null }>("/watermark"),
-  setWatermark: (image_url: string) =>
-    request<{ image_url: string }>("/admin/watermark", {
-      method: "PUT",
-      body: JSON.stringify({ image_url }),
-    }),
-  deleteWatermark: () => request<void>("/admin/watermark", { method: "DELETE" }),
-
-  // ============ Our Story ============
   getOurStory: () =>
     request<{ title: string; body: string; images: string[] }>("/our-story"),
   setOurStory: (title: string, body: string, images: string[]) =>
@@ -239,7 +237,6 @@ export const api = {
       body: JSON.stringify({ title, body, images }),
     }),
 
-  // ============ Season (global) ============
   getSeason: () => request<{ season: "summer" | "winter" | "all" }>("/settings/season"),
   setSeason: (season: "summer" | "winter" | "all") =>
     request<{ season: string }>("/admin/settings/season", {
