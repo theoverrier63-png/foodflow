@@ -4,7 +4,7 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = "https://foodflow-145.preview.emergentagent.com"
+BASE_URL = "https://web-only-app-3--48bbr5e0.preview.emergentagent.com"
 API = f"{BASE_URL}/api"
 
 SEED_EMAIL = "test@leray.fr"

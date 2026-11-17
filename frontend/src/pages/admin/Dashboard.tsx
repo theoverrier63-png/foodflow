@@ -52,7 +52,7 @@ export default function Dashboard() {
             Aucune commande récente.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-soft">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>

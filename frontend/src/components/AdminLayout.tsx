@@ -81,7 +81,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* Mobile top bar */}
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
           <Link to="/admin" className="font-bold text-brand-700">
             LERAY-POINTEL · Admin

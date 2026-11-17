@@ -82,3 +82,9 @@ CSV downloads: web = blob + anchor; native = share sheet. Backend adds `role` fi
 
 
 
+
+## v6.1 — Preview launcher fix + admin mobile (current)
+- GitHub repo `theoverrier63-png/foodflow` checked: identical to workspace (no `/web` folder; web site lives in `/frontend`, Vite).
+- Supervisor launches `yarn expo start` → `package.json` script `expo` now runs `scripts/start-web.cjs` (starts Vite on :3000).
+- Backend dependency `reportlab` reinstalled.
+- Admin pages: fixed mobile horizontal overflow (`min-w-0` on layout column, tables scroll inside their card).
